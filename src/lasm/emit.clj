@@ -39,6 +39,20 @@
                                          arg)))
                             args))))
 
+(defn emit-print-int [^GeneratorAdapter ga]
+  (let [out-stream-type (Type/getType ^java.lang.Class
+                           (.getGenericType
+                            (.getDeclaredField
+                             (Class/forName "java.lang.System") "out")))]
+      (.dup ga)
+      (.getStatic ga
+                  (resolve-type [:class "java.lang.System"])
+                  "out"
+                  out-stream-type)
+      (.swap ga)
+      (.invokeVirtual ga  out-stream-type
+                      (build-method "println" :void [:int]))))
+
 (defn emit-instr! [^GeneratorAdapter ga [cmd-type cmd]]
   (case cmd-type
     :do nil
@@ -89,8 +103,7 @@
     :return
     (.returnValue ga)
     :print
-    (do
-      ())))
+    (emit-print-int ga)))
 
 (defn emit-with-env [^GeneratorAdapter ga env [cmd-type cmd :as c]]
   (case cmd-type
@@ -204,11 +217,14 @@
             :args [:int]
             :return-type :int
             :body [[:arg { :value 0}]
+                   [:print]
+                   [:arg { :value 0}]
                    [:invoke-static
                     {:owner (resolve-type [:class  "Inc"])
-                     :method (build-method "invoke" :int [:int])}]]})
+                     :method (build-method "invoke" :int [:int])}]
+                   ]})
 
-  (CallMethod/invoke 101)
+  (CallMethod/invoke 2101)
 
 
   )
