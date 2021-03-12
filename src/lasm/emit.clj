@@ -5,15 +5,18 @@
            [org.objectweb.asm.commons Method GeneratorAdapter]))
 
 
-
-
 (set! *warn-on-reflection* true)
 
 (def INIT (Method/getMethod "void <init>()"))
 
 (defn resolve-type [expr-type]
-  (if (= Type (type expr-type))  ;;if expr is already of asm.Type
+  (cond
+    (= Type (type expr-type))  ;;if expr is already of asm.Type
     expr-type
+    (and (vector? expr-type)
+         (= (first expr-type) :class))
+    (Type/getType (Class/forName (second expr-type)))
+    :else
     (case expr-type
       :string (Type/getType String)
       :object (Type/getType Object)
@@ -21,23 +24,20 @@
       :int Type/INT_TYPE
       :long Type/LONG_TYPE
       :bool Type/BOOLEAN_TYPE
-      :lambda  (Type/getType (Class/forName "clojure.lang.AFn")) ;; for now at least that's the easiest
-      :Integer  (Type/getType (Class/forName "java.lang.Integer"))
-      (throw (ex-info "resolve-type failed" expr-type)))))
+      nil (throw (ex-info "[resolve-type] NIL expr-type!"))
+      (throw (ex-info "Unknown expr-type, resolve-type failed" expr-type)))))
 
 (defn build-method [method-name return-type args]
   ;; Consider using method signature string and Method/getMethod like this
   ;; (Method/getMethod "java.lang.Object invoke (java.lang.Object)")
   (Method. method-name
            (resolve-type return-type)
-           (into-array Type (map (fn [arg] (resolve-type
-                                            (if (map? arg)
-                                              (:var-type arg)
-                                              arg)))
-                                 args))))
-
-(defn build-invoke-lambda [arg-count]
-  (build-method "invoke" :object (repeat arg-count :object)))
+           (into-array Type
+                       (map (fn [arg] (resolve-type
+                                       (if (map? arg)
+                                         (:var-type arg)
+                                         arg)))
+                            args))))
 
 (defn emit-instr! [^GeneratorAdapter ga [cmd-type cmd]]
   (case cmd-type
@@ -68,10 +68,6 @@
     (.invokeInterface ga (resolve-type (:owner cmd))  (:method cmd))
     :invoke-constructor
     (.invokeConstructor ga (resolve-type (:owner cmd)) (:method cmd))
-    :invoke-lambda
-    (recur ga [:invoke-virtual {:owner   (resolve-type :lambda)
-                                :method  (build-invoke-lambda (:args cmd))}])
-
     :new
     (.newInstance ga (:owner cmd))
     :store-local
@@ -91,7 +87,10 @@
     :unbox
     (.unbox ga  (resolve-type (:var-type cmd)))
     :return
-    (.returnValue ga)))
+    (.returnValue ga)
+    :print
+    (do
+      ())))
 
 (defn emit-with-env [^GeneratorAdapter ga env [cmd-type cmd :as c]]
   (case cmd-type
@@ -122,7 +121,7 @@
 
 (defn make-static-method [^ClassWriter writer method-name {:keys [args return-type body] :as method-description}]
   (let [method (Method. method-name (resolve-type return-type)
-                        (into-array Type (map (comp resolve-type :var-type) args)))
+                        (into-array Type (map (comp resolve-type) args)))
         ga     (GeneratorAdapter. (int (+ Opcodes/ACC_PUBLIC Opcodes/ACC_STATIC)) method nil nil writer)]
     (reduce (fn [env line] (emit-with-env  ga env line)) {} body)
     (.endMethod ^GeneratorAdapter ga)))
@@ -156,7 +155,25 @@
 
 ;; bril like syntax ?
 ;; https://capra.cs.cornell.edu/bril/lang/syntax.html
-
+#_{:function {"Main" {:args []
+                    :return-type :int
+                    :body [[:int {:var-type :int, :value 23}]
+                           [:def-local {:var-id "x" :var-type :int}]
+                           [:int {:var-type :int, :value 119}]
+                           [:int {:var-type :int :value 19}]
+                           [:ref-local {:var-id "x"}]
+                           [:add-int]]}
+            "Inc" {:args [:int]
+                   :return-type :int
+                   :body [[:int {:var-type :int :value 1}]
+                          [:arg { :value 0}]
+                          [:add-int]]}
+            "CallMethod" {:args [:int]
+                          :return-type :int
+                          :body [[:arg { :value 0}]
+                                 [:invoke-static {:owner (Type/getType (Class/forName "Inc"))
+                                                  :method (build-method "invoke" :int [:int])}]]}}
+ :entry-point "Main"}
 
 (comment
 
@@ -168,8 +185,30 @@
       [:int {:var-type :int, :value 119}]
       [:int {:var-type :int :value 19}]
       [:ref-local {:var-id "x"}]
-      [:add-int]])
+      [:add-int ]])
 
     (HelloWorld/invoke))
+
+
+  (make-fn {:class-name "Inc"
+            :args [:int]
+            :return-type :int
+            :body [[:int {:var-type :int :value 1}]
+                   [:arg { :value 0}]
+                   [:add-int]]})
+
+  (Inc/invoke 89)
+
+
+  (make-fn {:class-name "CallMethod"
+            :args [:int]
+            :return-type :int
+            :body [[:arg { :value 0}]
+                   [:invoke-static
+                    {:owner (resolve-type [:class  "Inc"])
+                     :method (build-method "invoke" :int [:int])}]]})
+
+  (CallMethod/invoke 101)
+
 
   )
