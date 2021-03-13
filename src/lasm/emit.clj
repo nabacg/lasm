@@ -39,6 +39,12 @@
                                          arg)))
                             args))))
 
+(defn build-invoke-static [[ fn-name args return-type]]
+  (let [owner-class  (namespace fn-name)
+        method-name  (name fn-name)]
+    [:invoke-static {:owner [:class owner-class]
+                     :method (build-method method-name return-type args)}]))
+
 (defn emit-print-int [^GeneratorAdapter ga]
   (let [out-stream-type (Type/getType ^java.lang.Class
                            (.getGenericType
@@ -68,14 +74,16 @@
     :div-int
     (recur ga [:math {:op GeneratorAdapter/DIV
                       :op-type Type/INT_TYPE}])
+    :call-fn
+    (recur ga (build-invoke-static cmd))
     :arg
     (.loadArg ga (:value cmd))
     :math
     (.math ga (:op cmd) (:op-type cmd))
     :get-static-field
-    (.getStatic ga (:owner cmd) (:name cmd) (resolve-type  (:result-type cmd)))
+    (.getStatic ga (resolve-type (:owner cmd)) (:name cmd) (resolve-type  (:result-type cmd)))
     :invoke-static
-    (.invokeStatic ga (:owner cmd) (:method cmd))
+    (.invokeStatic ga (resolve-type (:owner cmd)) (:method cmd))
     :invoke-virtual
     (.invokeVirtual ga (resolve-type (:owner cmd)) (:method cmd))
     :invoke-interface
@@ -168,7 +176,7 @@
 
 ;; bril like syntax ?
 ;; https://capra.cs.cornell.edu/bril/lang/syntax.html
-#_{:function {"Main" {:args []
+{:fns  {"Main" {:args []
                     :return-type :int
                     :body [[:int {:var-type :int, :value 23}]
                            [:def-local {:var-id "x" :var-type :int}]
@@ -176,17 +184,19 @@
                            [:int {:var-type :int :value 19}]
                            [:ref-local {:var-id "x"}]
                            [:add-int]]}
-            "Inc" {:args [:int]
-                   :return-type :int
-                   :body [[:int {:var-type :int :value 1}]
-                          [:arg { :value 0}]
-                          [:add-int]]}
-            "CallMethod" {:args [:int]
-                          :return-type :int
-                          :body [[:arg { :value 0}]
-                                 [:invoke-static {:owner (Type/getType (Class/forName "Inc"))
-                                                  :method (build-method "invoke" :int [:int])}]]}}
+        "Inc" {:args [:int]
+               :return-type :int
+               :body [[:int {:var-type :int :value 1}]
+                      [:arg { :value 0}]
+                      [:add-int]]}
+        "CallMethod" {:args [:int]
+                      :return-type :int
+                      :body [[:arg { :value 0}]
+                             [:invoke-static {:owner (resolve-type [:class "Inc"])
+                                              :method (build-method "invoke" :int [:int])}]]}}
  :entry-point "Main"}
+
+
 
 (comment
 
@@ -219,12 +229,16 @@
             :body [[:arg { :value 0}]
                    [:print]
                    [:arg { :value 0}]
+                   #_
                    [:invoke-static
-                    {:owner (resolve-type [:class  "Inc"])
+                    {:owner  [:class  "Inc"]
                      :method (build-method "invoke" :int [:int])}]
+                   [:call-fn [:Inc/invoke [:int] :int]]
                    ]})
 
-  (CallMethod/invoke 2101)
+
+
+  (CallMethod/invoke 21)
 
 
   )
