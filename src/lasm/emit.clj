@@ -184,27 +184,18 @@
             :body code}))
 
 
-;; bril like syntax ?
-;; https://capra.cs.cornell.edu/bril/lang/syntax.html
-{:fns  {"Main" {:args []
-                    :return-type :int
-                    :body [[:int {:var-type :int, :value 23}]
-                           [:def-local {:var-id "x" :var-type :int}]
-                           [:int {:var-type :int, :value 119}]
-                           [:int {:var-type :int :value 19}]
-                           [:ref-local {:var-id "x"}]
-                           [:add-int]]}
-        "Inc" {:args [:int]
-               :return-type :int
-               :body [[:int {:var-type :int :value 1}]
-                      [:arg { :value 0}]
-                      [:add-int]]}
-        "CallMethod" {:args [:int]
-                      :return-type :int
-                      :body [[:arg { :value 0}]
-                             [:invoke-static {:owner (resolve-type [:class "Inc"])
-                                              :method (build-method "invoke" :int [:int])}]]}}
- :entry-point "Main"}
+(defn build-and-run [{:keys [fns entry-point]}]
+  (run! (fn [[fn-name body]]
+          (make-fn (assoc body :class-name fn-name)))
+        fns)
+
+  (.invoke ^java.lang.reflect.Method
+           (.getMethod ^java.lang.Class (Class/forName entry-point)
+                       "invoke" (into-array Class []))
+           nil
+           ;; maybe pass cmd line args into `build-and-run`?
+           (into-array Object [])))
+
 
 
 
@@ -257,4 +248,83 @@
 
   (CallMethod/invoke 121)
 
+  (make-fn {:args [:int]
+            :return-type :int
+            ;; f(x) = 2*x^2 -13 * x + 119
+            :body [[:int { :value 119}] ;; 119
+                   [:arg {:value 0}]
+                   [:def-local {:var-id "x" :var-type :int}]
+                   [:ref-local {:var-id "x"}]
+                   [:int {:var-type :int :value 13}]
+                   [:mul-int] ;; 13*x
+                   [:sub-int] ;; -13*x + 119
+                   [:int { :value 2}]
+                   [:ref-local {:var-id "x"}]
+                   [:ref-local {:var-id "x"}]
+                   [:mul-int] ;; x^2
+                   [:mul-int] ;; 2 * x^2
+                   [:add-int] ;;2*x^2 -13*x +119
+                   ]
+            :class-name "DoMath"})
+
+  (DoMath/invoke 102)
+
   )
+
+
+;; bril like syntax ?
+;; https://capra.cs.cornell.edu/bril/lang/syntax.html
+(build-and-run {:fns  {
+                       "Inc" {:args [:int]
+                              :return-type :int
+                              :body [[:int {:var-type :int :value 1}]
+                                     [:arg { :value 0}]
+                                     [:add-int]]}
+                       "CallMethod" {:args [:int]
+                                     :return-type :int
+                                     :body [[:arg { :value 0}]
+                                            [:call-fn [:Inc/invoke [:int] :int]]]}
+                       "HelloWorld" {:args [:string]
+                                     :return-type :string
+                                     :body [[:string {:value "Hello "}]
+                                            [:arg {:value 0}]
+                                            [:interop-call [:java.lang.String/concat [ :string] :string]]]}
+                       "DoMath" {:args [:int]
+                                 :return-type :int
+                                 ;; f(x) = 2*x^2 -13 * x + 119
+                                 :body [[:int { :value 119}] ;; 119
+                                        [:arg {:value 0}]
+                                        [:def-local {:var-id "x" :var-type :int}]
+                                        [:ref-local {:var-id "x"}]
+                                        [:int {:var-type :int :value 13}]
+                                        [:mul-int] ;; 13*x
+                                        [:sub-int] ;; -13*x + 119
+                                        [:int { :value 2}]
+                                        [:ref-local {:var-id "x"}]
+                                        [:ref-local {:var-id "x"}]
+                                        [:mul-int] ;; x^2
+                                        [:mul-int] ;; 2 * x^2
+                                        [:add-int] ;;2*x^2 -13*x +119
+                                        ]}
+                       "Main3" {:args []
+                               :return-type :void
+                               :body [[:string {:value "Inc/invoke 41"}]
+                                      [:print {:args [:string]}]
+                                      [:int {:value 41}]
+                                      [:call-fn [:Inc/invoke [:int] :int]]
+                                      [:print]
+
+                                      [:string {:value "HelloWorld/invoke MyNameIsJohnny"}]
+                                      [:print {:args [:string]}]
+                                      [:string {:value "MyNameIsJohnny"}]
+                                      [:call-fn [:HelloWorld/invoke [:string] :string]]
+                                      [:print {:args [:string]}]
+
+                                      [:string {:value "(DoMath/invoke (Inc/invoke (Inc/invoke 100)))"}]
+                                      [:print {:args [:string]}]
+                                      [:int {:value 100}]
+                                      [:call-fn [:Inc/invoke [:int] :int]]
+                                      [:call-fn [:Inc/invoke [:int] :int]]
+                                      [:call-fn [:DoMath/invoke [:int] :int]]
+                                      [:print]]}}
+                :entry-point "Main3"})
