@@ -39,13 +39,19 @@
                                          arg)))
                             args))))
 
-(defn build-invoke-static [[ fn-name args return-type]]
+(defn build-invoke-props [[fn-name args return-type]]
   (let [owner-class  (namespace fn-name)
         method-name  (name fn-name)]
-    [:invoke-static {:owner [:class owner-class]
-                     :method (build-method method-name return-type args)}]))
+    {:owner [:class owner-class]
+     :method (build-method method-name return-type args)}))
 
-(defn emit-print-int [^GeneratorAdapter ga]
+(defn build-invoke-static [cmd]
+  [:invoke-static (build-invoke-props cmd)])
+
+(defn build-invoke-interop [cmd]
+  [:invoke-virtual (build-invoke-props cmd)])
+
+(defn emit-print [^GeneratorAdapter ga {:keys [args] :or {args [:int]}}]
   (let [out-stream-type (Type/getType ^java.lang.Class
                            (.getGenericType
                             (.getDeclaredField
@@ -57,7 +63,7 @@
                   out-stream-type)
       (.swap ga)
       (.invokeVirtual ga  out-stream-type
-                      (build-method "println" :void [:int]))))
+                      (build-method "println" :void args))))
 
 (defn emit-instr! [^GeneratorAdapter ga [cmd-type cmd]]
   (case cmd-type
@@ -76,6 +82,8 @@
                       :op-type Type/INT_TYPE}])
     :call-fn
     (recur ga (build-invoke-static cmd))
+    :interop-call
+    (recur ga (build-invoke-interop cmd))
     :arg
     (.loadArg ga (:value cmd))
     :math
@@ -98,6 +106,8 @@
     (.loadLocal ga  (:local-ref cmd) (resolve-type (:local-type cmd)))
     :int
     (.push ga (int (:value cmd)))
+    :string
+    (.push ga ^java.lang.String (:value cmd))
     :put-field
     (.putField ga (:owner cmd) (:name cmd) (resolve-type (:field-type cmd)))
     :dup
@@ -111,7 +121,7 @@
     :return
     (.returnValue ga)
     :print
-    (emit-print-int ga)))
+    (emit-print ga cmd)))
 
 (defn emit-with-env [^GeneratorAdapter ga env [cmd-type cmd :as c]]
   (case cmd-type
@@ -220,25 +230,31 @@
                    [:arg { :value 0}]
                    [:add-int]]})
 
-  (Inc/invoke 89)
+  (Inc/invoke 1)
+
+  (make-fn {:class-name "StrConcat"
+            :args [:string]
+            :return-type :string
+            :body [[:string {:value "Hello "}]
+                   [:arg {:value 0}]
+                   [:interop-call [:java.lang.String/concat [ :string] :string]]]})
+
+  (StrConcat/invoke "Johnny")
 
 
   (make-fn {:class-name "CallMethod"
             :args [:int]
             :return-type :int
-            :body [[:arg { :value 0}]
+            :body [[:string {:value "World!"}]
+                   [:call-fn [:SayHi/invoke [:string] :string]]
+                   [:print {:args [:string]}]
+                   [:arg {:value 0}]
                    [:print]
                    [:arg { :value 0}]
-                   #_
-                   [:invoke-static
-                    {:owner  [:class  "Inc"]
-                     :method (build-method "invoke" :int [:int])}]
-                   [:call-fn [:Inc/invoke [:int] :int]]
-                   ]})
+                   [:call-fn [:Inc/invoke [:int] :int]]]})
 
 
 
-  (CallMethod/invoke 21)
-
+  (CallMethod/invoke 121)
 
   )
