@@ -87,42 +87,59 @@
         tenv'     (assoc tenv fn-name {:args arg-types :return-type return-type})
         tenv-with-params (into tenv' (map (juxt :id :type) args))
         [tenv'' body-irs] (do-asts-in-env tenv-with-params body)]
-    [tenv''
-     [{fn-name {:args arg-types
-                :return-type return-type
-                :body (into (args-to-locals args)
-                            body-irs)}}]]))
+    [tenv'
+     [{:class-name fn-name
+       :args arg-types
+       :return-type return-type
+       :body (into (args-to-locals args)
+                   body-irs)}]]))
 
 
 (defn init-tenv []
   {"java.lang.String/concat" {:args [:string]
                               :return-type :string}})
 
-(defn build-program [asts entry-point]
-  (let [[_ ir] (do-asts-in-env (init-tenv) asts)]
+(defn build-program [exprs]
+  (let [{:keys [FunDef] :as expr-by-type} (group-by first exprs)
+        top-level-exprs    (mapcat identity (vals (dissoc expr-by-type :FunDef)))
+        [tenv fn-defs-ir]  (do-asts-in-env (init-tenv) FunDef)
+        ;; TODO does this really need to be that complicated? we could probably return a {FnName -> Fn} map from above fn
+        ;fn-defs-ir         (apply merge fn-defs-ir)
+        main-fn-name       (name (gensym "Main_"))
+        [_ [main-fn-ir]]     (do-asts-in-env
+                            tenv
+                            [(into
+                              [:FunDef main-fn-name
+                               {:args []
+                                :return-type :void}]
+                              top-level-exprs)])]
     ;;TODO check if all top level IR expr are maps of {FnNamestr Fn-expr}
-    {:fns (apply merge ir)
-     :entry-point entry-point}))
+    {:fns (conj (vec fn-defs-ir) main-fn-ir)
+     :entry-point main-fn-name}))
+
+
 
 (comment
   (ast-to-ir [:FunCall "Main"]
-             {"Main" {:args [:string]
+             {"Main" {:args [{:id "x" :type :string}]
                       :return-type :string}})
 
 
-  (ast-to-ir [:FunDef "Main"  {:args [:string]
+  (ast-to-ir [:FunDef "Main"  {:args [{:id "x" :type :string}]
                                :return-type :string}
               [:FunCall "Other"]
-              [:FunCall "Main" "Arg1"]] {"Other" {:args []
-                                                  :return-type :string}})
+              [:FunCall "Main" "Arg1"]]
+             {"Other" {:args []
+                       :return-type :string}})
 
 
   (ast-to-ir [:FunDef "HelloWorld"
               {:args [{:id "x" :type :string}]
                :return-type :string}
               [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
-             { "java.lang.String/concat" {:args [:string]
-                                          :return-type :string}})
+             { "java.lang.String/concat"
+              {:args [:string]
+               :return-type :string}})
 
   (do-asts-in-env (init-tenv)
                   [[:FunDef "HelloWorld"
@@ -142,8 +159,9 @@
     [:FunDef "Main"
      {:args []
       :return-type :void}
-     [:FunCall "HelloWorld" "Johnny"]]]
-   "Main"))
+     [:FunCall "HelloWorld" "Johnny"]]
+    [:FunCall "Main"]])
+  )
 
 
 
@@ -163,7 +181,7 @@
           :return-type :string}
          [:FunCall "Hello" "Johnny"]]]
        "Main112")
-      emit/build-and-run)
+      emit/emit-and-run)
 
 
 
@@ -189,6 +207,4 @@
                    [:Hello/invoke [:string] :string]]
                   [:print {:args [:string]}]]})
 
-  (MA1/invoke)
-
-  )
+  (MA1/invoke))
