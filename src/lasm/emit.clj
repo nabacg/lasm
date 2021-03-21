@@ -157,7 +157,7 @@
     (reduce (fn [env line] (emit-with-env  ga env line)) {} body)
     (.endMethod ^GeneratorAdapter ga)))
 
-
+#_(require '[lasm.decompiler :as decomp])
 (defn make-fn [{:keys [class-name body] :as fn-definition}]
   (let [writer (ClassWriter. ClassWriter/COMPUTE_FRAMES)
       ;;  body   (linearize body)
@@ -174,6 +174,11 @@
                   (clojure.lang.DynamicClassLoader.)
                   (.replace ^String class-name \/ \.)
                   (.toByteArray ^ClassWriter writer) nil)
+#_    (decomp/to-bytecode (.toByteArray ^ClassWriter  writer)
+                        "TestConcat")
+
+  #_  (decomp/to-java (.toByteArray ^ClassWriter  writer)
+                        "TestConcat")
     class-name))
 
 
