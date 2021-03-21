@@ -104,47 +104,48 @@
     {:fns (apply merge ir)
      :entry-point entry-point}))
 
-
-(ast-to-ir [:FunCall "Main"]
-           {"Main" {:args [:string]
-                    :return-type :string}})
-
-
-(ast-to-ir [:FunDef "Main"  {:args [:string]
-                             :return-type :string}
-            [:FunCall "Other"]
-            [:FunCall "Main" "Arg1"]] {"Other" {:args []
-                                                :return-type :string}})
+(comment
+  (ast-to-ir [:FunCall "Main"]
+             {"Main" {:args [:string]
+                      :return-type :string}})
 
 
-(ast-to-ir [:FunDef "HelloWorld"
-            {:args [{:id "x" :type :string}]
-             :return-type :string}
-            [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
-           { "java.lang.String/concat" {:args [:string]
-                                        :return-type :string}})
+  (ast-to-ir [:FunDef "Main"  {:args [:string]
+                               :return-type :string}
+              [:FunCall "Other"]
+              [:FunCall "Main" "Arg1"]] {"Other" {:args []
+                                                  :return-type :string}})
 
-(do-asts-in-env (init-tenv)
-                [[:FunDef "HelloWorld"
-                  {:args [{:id "x" :type :string}]
-                   :return-type :string}
-                  [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
-                 [:FunDef "Main"
-                  {:args []
-                   :return-type :void}
-                  [:FunCall "HelloWorld" "Johnny"]]]
-                )
 
-(build-program
- [[:FunDef "HelloWorld"
-   {:args [{:id "x" :type :string}]
-    :return-type :string}
-   [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
-  [:FunDef "Main"
-   {:args []
-    :return-type :void}
-   [:FunCall "HelloWorld" "Johnny"]]]
- "Main")
+  (ast-to-ir [:FunDef "HelloWorld"
+              {:args [{:id "x" :type :string}]
+               :return-type :string}
+              [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
+             { "java.lang.String/concat" {:args [:string]
+                                          :return-type :string}})
+
+  (do-asts-in-env (init-tenv)
+                  [[:FunDef "HelloWorld"
+                    {:args [{:id "x" :type :string}]
+                     :return-type :string}
+                    [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
+                   [:FunDef "Main"
+                    {:args []
+                     :return-type :void}
+                    [:FunCall "HelloWorld" "Johnny"]]]
+                  )
+  (build-program
+   [[:FunDef "HelloWorld"
+     {:args [{:id "x" :type :string}]
+      :return-type :string}
+     [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
+    [:FunDef "Main"
+     {:args []
+      :return-type :void}
+     [:FunCall "HelloWorld" "Johnny"]]]
+   "Main"))
+
+
 
 
 (comment
@@ -166,27 +167,6 @@
 
 
 
-
-  (-> {:fns
-       {"Hello"
-        {:args [:string],
-         :return-type :string,
-         :body
-         [[:arg {:value 0}]
-          [:def-local {:var-id "x", :var-type :string}]
-          [:string {:value "Hello "}]
-          [:ref-local {:var-id "x"}]
-          [:interop-call [:java.lang.String/concat [:string] :string]]]}
-        "Main"
-        {:args [],
-         :return-type :void,
-         :body
-         [[:string {:value "Johnny"}]
-          [:call-fn
-           [:Hello/invoke [:string] :string]]]}
-        :entry-point "Main"}}
-      emit/build-and-run)
-
   (emit/make-fn   {:class-name "TestConcat"
                    :args [:string],
                    :return-type :string,
@@ -197,6 +177,8 @@
                     [:ref-local {:var-id "x"}]
                     [:interop-call [:java.lang.String/concat [:string] :string]]]},)
 
+
+  (TestConcat/invoke "Johnny Von Neuman")
 
   (emit/make-fn {:class-name "MA1"
                  :args [],
@@ -210,15 +192,3 @@
   (MA1/invoke)
 
   )
-
-
-
-(:fns {"HelloWorld" {:args [:string]
-                     :return-type :string
-                     :body [[:string {:value "Hello "}]
-                            [:arg {:value 0}]
-                            [:interop-call [:java.lang.String/concat [ :string] :string]]]}}
-      {"Main" {:args []
-               :return-type :void
-               :body [[:string {:value "Cherry Bomb"}]
-                      [:call-fn [:HelloWorld/invoke [:string] :string]]]}})
