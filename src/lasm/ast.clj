@@ -42,7 +42,7 @@
                                [:def-local {:var-id id :var-type type}]])
                             args))))
 
-(defn do-asts-in-env [env exprs]
+(defn map-ast-to-ir [env exprs]
   (reduce (fn [[env irs] expr]
             (let [[env' ir] (ast-to-ir expr env)]
               [env' (into irs ir)]))
@@ -62,7 +62,7 @@
 (defmethod ast-to-ir :InteropCall [[_ method-name & method-args] tenv]
   (if-let [fn-type  (tenv method-name)]
     (let [{:keys [args return-type]} fn-type
-          [_ args-ir] (do-asts-in-env tenv method-args)]
+          [_ args-ir] (map-ast-to-ir tenv method-args)]
       [tenv
        (if (empty? args-ir)
          [[:interop-call [(keyword method-name) args return-type]]]
@@ -73,7 +73,7 @@
 (defmethod ast-to-ir :FunCall [[_ fn-name & fn-args] tenv]
   (if-let [fn-type  (tenv fn-name)]
     (let [{:keys [args return-type]} fn-type
-          [_ args-ir] (do-asts-in-env tenv fn-args)]
+          [_ args-ir] (map-ast-to-ir tenv fn-args)]
       [tenv
        (if (empty? args-ir)
          [[:call-fn [(keyword fn-name "invoke") args return-type]]]
@@ -86,7 +86,7 @@
   (let [arg-types (mapv :type args)
         tenv'     (assoc tenv fn-name {:args arg-types :return-type return-type})
         tenv-with-params (into tenv' (map (juxt :id :type) args))
-        [tenv'' body-irs] (do-asts-in-env tenv-with-params body)]
+        [tenv'' body-irs] (map-ast-to-ir tenv-with-params body)]
     [tenv'
      [{:class-name fn-name
        :args arg-types
@@ -102,11 +102,11 @@
 (defn build-program [exprs]
   (let [{:keys [FunDef] :as expr-by-type} (group-by first exprs)
         top-level-exprs    (mapcat identity (vals (dissoc expr-by-type :FunDef)))
-        [tenv fn-defs-ir]  (do-asts-in-env (init-tenv) FunDef)
+        [tenv fn-defs-ir]  (map-ast-to-ir (init-tenv) FunDef)
         ;; TODO does this really need to be that complicated? we could probably return a {FnName -> Fn} map from above fn
         ;fn-defs-ir         (apply merge fn-defs-ir)
         main-fn-name       (name (gensym "Main_"))
-        [_ [main-fn-ir]]     (do-asts-in-env
+        [_ [main-fn-ir]]     (map-ast-to-ir
                             tenv
                             [(into
                               [:FunDef main-fn-name
@@ -141,7 +141,7 @@
               {:args [:string]
                :return-type :string}})
 
-  (do-asts-in-env (init-tenv)
+  (map-ast-to-ir (init-tenv)
                   [[:FunDef "HelloWorld"
                     {:args [{:id "x" :type :string}]
                      :return-type :string}
@@ -163,6 +163,13 @@
     [:FunCall "Main"]])
 
 
+
+  )
+
+
+
+
+(comment
   (require '[lasm.emit :as emit])
 
 
@@ -177,13 +184,6 @@
          [:FunCall "Hello" "Johnny"]]]
        "Main112")
       emit/emit-and-run!)
-  )
-
-
-
-
-(comment
-
 
 
 
