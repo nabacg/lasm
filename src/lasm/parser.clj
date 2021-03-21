@@ -15,7 +15,7 @@ Prog := TopLevelExpr (ws expr-delim+ ws TopLevelExpr)*
 <symbol> :=  #'[a-zA-Z][a-zA-Z0-9]*'
 <comma-delimited-exprs> := Expr (ws <','> ws Expr)*
 VarExpr := symbol[TypeAnnotation]
-StringExpr := <'\"'> #'[.[^\"\"].]*' <'\"'>
+StringExpr := <'\"'> #'[.[^\"]]*' <'\"'>
 NumExpr := #'[0-9]+'
 <TypeAnnotation> := ws <':'> ws TypeExpr
 FunDef := <'fn'>ws symbol ws<'('> ws params? ws  <')'> TypeAnnotation ws <'=>'> ws body
