@@ -85,31 +85,49 @@ main()")
   (mapv trans-to-ast exprs))
 
 
-(require '[lasm.ast :as ast]
-         '[lasm.emit :as emitter])
+(comment
+  (require '[lasm.ast :as ast]
+           '[lasm.emit :as emitter])
 
-(->
- "fn HelloWorld(x: string): string => { .concat(java.lang.String,  \"Hello \", x) }
-fn Main():string => {HelloWorld(\"Johnny\")}
+
+
+  (->
+   "fn HelloWorld(x: string): string => { .concat(java.lang.String,  \"Hello \", x) }
+fn Main():string => { HelloWorld(\"Johnny\") }
 Main()"
-  ;; leaving top level call expr for later
- parser
- parse-tree-to-ast
- ast/build-program
- ;; TODO this won't return since build-program creates entry-point with :return-type :void
- ;; figuring out how to parameterize this for different return types and command args would be useful!
- emitter/emit-and-run)
+   ;; leaving top level call expr for later
+   parser
+   parse-tree-to-ast
+   ast/build-program
+   ;; TODO this won't return since build-program creates entry-point with :return-type :void
+   ;; figuring out how to parameterize this for different return types and command args would be useful!
+   emitter/emit-and-run!)
+
+
+
+  (->
+   "fn HelloWorld(x: string): string => { .concat(java.lang.String,  \"Hello \", x) }
+fn NewMain(n: string):string => { HelloWorld(n) }"
+   ;; leaving top level call expr for later
+   parser
+   parse-tree-to-ast
+   ast/build-program
+   ;; TODO this won't return since build-program creates entry-point with :return-type :void
+   ;; figuring out how to parameterize this for different return types and command args would be useful!
+   emitter/emit!)
+
+  (NewMain/invoke "Stefan")
 
 
 
 
 
-;=>
-[[:FunDef "HelloWorld"
-  {:args [{:id "x" :type :string}]
-   :return-type :string}
-  [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
- [:FunDef "Main"
-  {:args []
-   :return-type :void}
-  [:FunCall "HelloWorld" "Johnny"]]]
+                                        ;=>
+  [[:FunDef "HelloWorld"
+    {:args [{:id "x" :type :string}]
+     :return-type :string}
+    [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
+   [:FunDef "Main"
+    {:args []
+     :return-type :void}
+    [:FunCall "HelloWorld" "Johnny"]]])

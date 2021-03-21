@@ -161,12 +161,7 @@
       :return-type :void}
      [:FunCall "HelloWorld" "Johnny"]]
     [:FunCall "Main"]])
-  )
 
-
-
-
-(comment
 
   (require '[lasm.emit :as emit])
 
@@ -181,7 +176,15 @@
           :return-type :string}
          [:FunCall "Hello" "Johnny"]]]
        "Main112")
-      emit/emit-and-run)
+      emit/emit-and-run!)
+  )
+
+
+
+
+(comment
+
+
 
 
 

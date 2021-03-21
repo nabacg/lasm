@@ -157,7 +157,8 @@
     (reduce (fn [env line] (emit-with-env  ga env line)) {} body)
     (.endMethod ^GeneratorAdapter ga)))
 
-(require '[lasm.decompiler :as decomp])
+;(require '[lasm.decompiler :as decomp])
+
 (defn make-fn [{:keys [class-name body] :as fn-definition}]
   (let [writer (ClassWriter. ClassWriter/COMPUTE_FRAMES)
       ;;  body   (linearize body)
@@ -188,9 +189,11 @@
             :return-type :int
             :body code}))
 
+(defn emit! [{:keys [fns]}]
+  (run! make-fn fns))
 
-(defn emit-and-run [{:keys [fns entry-point]}]
-  (run! make-fn fns)
+(defn emit-and-run! [{:keys [ entry-point] :as exprs}]
+  (emit! exprs)
 
   (.invoke ^java.lang.reflect.Method
            (.getMethod ^java.lang.Class (Class/forName entry-point)
@@ -199,63 +202,65 @@
            ;; maybe pass cmd line args into `emit-and-run`?
            (into-array Object [])))
 
-;; bril like syntax ?
-;; https://capra.cs.cornell.edu/bril/lang/syntax.html
-(emit-and-run {:fns [{:args [:int],
-                       :return-type :int,
-                       :body
-                       [[:int {:var-type :int, :value 1}] [:arg {:value 0}] [:add-int]],
-                       :class-name "Inc"}
-                      {:args [:int],
-                       :return-type :int,
-                       :body [[:arg {:value 0}] [:call-fn [:Inc/invoke [:int] :int]]],
-                       :class-name "CallMethod"}
-                      {:args [:string],
-                       :return-type :string,
-                       :body
-                       [[:string {:value "Hello "}]
-                        [:arg {:value 0}]
-                        [:interop-call [:java.lang.String/concat [:string] :string]]],
-                       :class-name "HelloWorld"}
-                      {:args [:int],
-                       :return-type :int,
-                       :body
-                       [[:int {:value 119}]
-                        [:arg {:value 0}]
-                        [:def-local {:var-id "x", :var-type :int}]
-                        [:ref-local {:var-id "x"}]
-                        [:int {:var-type :int, :value 13}]
-                        [:mul-int]
-                        [:sub-int]
-                        [:int {:value 2}]
-                        [:ref-local {:var-id "x"}]
-                        [:ref-local {:var-id "x"}]
-                        [:mul-int]
-                        [:mul-int]
-                        [:add-int]],
-                       :class-name "DoMath"}
-                      {:args [],
-                       :return-type :void,
-                       :body
-                       [[:string {:value "Inc/invoke 41"}]
-                        [:print {:args [:string]}]
-                        [:int {:value 41}]
-                        [:call-fn [:Inc/invoke [:int] :int]]
-                        [:print]
-                        [:string {:value "HelloWorld/invoke MyNameIsJohnny"}]
-                        [:print {:args [:string]}]
-                        [:string {:value "MyNameIsJohnny"}]
-                        [:call-fn [:HelloWorld/invoke [:string] :string]]
-                        [:print {:args [:string]}]
-                        [:string {:value "(DoMath/invoke (Inc/invoke (Inc/invoke 100)))"}]
-                        [:print {:args [:string]}]
-                        [:int {:value 100}]
-                        [:call-fn [:Inc/invoke [:int] :int]]
-                        [:call-fn [:Inc/invoke [:int] :int]]
-                        [:call-fn [:DoMath/invoke [:int] :int]]
-                        [:print]],
-                       :class-name "Main3"}]
-                :entry-point "Main3"})
+
+(comment
+  ;; bril like syntax ?
+  ;; https://capra.cs.cornell.edu/bril/lang/syntax.html
+  (emit-and-run! {:fns [{:args [:int],
+                        :return-type :int,
+                        :body
+                        [[:int {:var-type :int, :value 1}] [:arg {:value 0}] [:add-int]],
+                        :class-name "Inc"}
+                       {:args [:int],
+                        :return-type :int,
+                        :body [[:arg {:value 0}] [:call-fn [:Inc/invoke [:int] :int]]],
+                        :class-name "CallMethod"}
+                       {:args [:string],
+                        :return-type :string,
+                        :body
+                        [[:string {:value "Hello "}]
+                         [:arg {:value 0}]
+                         [:interop-call [:java.lang.String/concat [:string] :string]]],
+                        :class-name "HelloWorld"}
+                       {:args [:int],
+                        :return-type :int,
+                        :body
+                        [[:int {:value 119}]
+                         [:arg {:value 0}]
+                         [:def-local {:var-id "x", :var-type :int}]
+                         [:ref-local {:var-id "x"}]
+                         [:int {:var-type :int, :value 13}]
+                         [:mul-int]
+                         [:sub-int]
+                         [:int {:value 2}]
+                         [:ref-local {:var-id "x"}]
+                         [:ref-local {:var-id "x"}]
+                         [:mul-int]
+                         [:mul-int]
+                         [:add-int]],
+                        :class-name "DoMath"}
+                       {:args [],
+                        :return-type :void,
+                        :body
+                        [[:string {:value "Inc/invoke 41"}]
+                         [:print {:args [:string]}]
+                         [:int {:value 41}]
+                         [:call-fn [:Inc/invoke [:int] :int]]
+                         [:print]
+                         [:string {:value "HelloWorld/invoke MyNameIsJohnny"}]
+                         [:print {:args [:string]}]
+                         [:string {:value "MyNameIsJohnny"}]
+                         [:call-fn [:HelloWorld/invoke [:string] :string]]
+                         [:print {:args [:string]}]
+                         [:string {:value "(DoMath/invoke (Inc/invoke (Inc/invoke 100)))"}]
+                         [:print {:args [:string]}]
+                         [:int {:value 100}]
+                         [:call-fn [:Inc/invoke [:int] :int]]
+                         [:call-fn [:Inc/invoke [:int] :int]]
+                         [:call-fn [:DoMath/invoke [:int] :int]]
+                         [:print]],
+                        :class-name "Main3"}]
+                 :entry-point "Main3"}))
 
 
 
