@@ -161,7 +161,6 @@
 
 (defn make-fn [{:keys [class-name body] :as fn-definition}]
   (let [writer (ClassWriter. ClassWriter/COMPUTE_FRAMES)
-      ;;  body   (linearize body)
         body   (if (= :return (first (last body))) body (conj body [:return]))]
 
     (println "make-fn name=" class-name " body=")
@@ -260,7 +259,9 @@
                          [:call-fn [:DoMath/invoke [:int] :int]]
                          [:print]],
                         :class-name "Main3"}]
-                 :entry-point "Main3"}))
+                  :entry-point "Main3"})
+
+  )
 
 
 

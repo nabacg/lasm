@@ -33,7 +33,7 @@
 (defmulti ast-to-ir (fn [expr _]
                       (cond
                         (vector? expr)  (first expr)
-                        :else (type "sa"))))
+                        :else (type expr))))
 
 (defn args-to-locals [args]
   (vec (mapcat identity
@@ -48,10 +48,39 @@
               [env' (into irs ir)]))
           [env []] exprs))
 
+(defn ops-to-ir [ops tenv]
+  (vec (mapcat #(second (ast-to-ir % tenv))
+               ops)))
+
+(defmethod ast-to-ir :AddInt [[_ & ops] tenv]
+  [tenv
+   (conj (ops-to-ir ops tenv)
+         [:add-int])])
+
+(defmethod ast-to-ir :SubInt [[_ & ops] tenv]
+  [tenv
+   (conj (ops-to-ir ops tenv)
+         [:sub-int])])
+
+(defmethod ast-to-ir :MulInt [[_ & ops] tenv]
+  [tenv
+   (conj (vec (mapcat #(second (ast-to-ir % tenv))
+                      ops))
+         [:mul-int])])
+
+(defmethod ast-to-ir :DivInt [[_ & ops] tenv]
+  [tenv
+   (conj (mapv #(first (second (ast-to-ir % tenv)))
+               ops)
+         [:div-int])])
+
 (defmethod ast-to-ir java.lang.String [str-val env]
   [env [[:string {:value str-val}]]])
 
 (defmethod ast-to-ir java.lang.Long [int-val env]
+  [env [[:int {:value int-val}]]])
+
+(defmethod ast-to-ir java.lang.Integer [int-val env]
   [env [[:int {:value int-val}]]])
 
 (defmethod ast-to-ir :VarRef [[_ id] env]
@@ -101,7 +130,7 @@
 
 (defn build-program [exprs]
   (let [{:keys [FunDef] :as expr-by-type} (group-by first exprs)
-        top-level-exprs    (mapcat identity (vals (dissoc expr-by-type :FunDef)))
+        top-level-exprs    (mapcat identity (vals (dissoc expr-by-type :FunDef))) ;; take everything but :FunDef
         [tenv fn-defs-ir]  (map-ast-to-ir (init-tenv) FunDef)
         ;; TODO does this really need to be that complicated? we could probably return a {FnName -> Fn} map from above fn
         ;fn-defs-ir         (apply merge fn-defs-ir)
@@ -111,7 +140,7 @@
                             [(into
                               [:FunDef main-fn-name
                                {:args []
-                                :return-type :void}]
+                                :return-type :int}]
                               top-level-exprs)])]
     ;;TODO check if all top level IR expr are maps of {FnNamestr Fn-expr}
     {:fns (conj (vec fn-defs-ir) main-fn-ir)
@@ -123,6 +152,9 @@
   (ast-to-ir [:FunCall "Main"]
              {"Main" {:args [{:id "x" :type :string}]
                       :return-type :string}})
+
+  (ast-to-ir [:DivInt 23 1]
+             {})
 
 
   (ast-to-ir [:FunDef "Main"  {:args [{:id "x" :type :string}]
@@ -151,6 +183,11 @@
                      :return-type :void}
                     [:FunCall "HelloWorld" "Johnny"]]]
                   )
+  (ast-to-ir [:FunDef "f" {:args [], :return-type :int} [:AddInt 2 [:MulInt 2 4]]] {})
+
+  (build-program [[:FunDef "f" {:args [], :return-type :int} [:AddInt 2 2]]
+                  [:FunCall "f"]])
+
   (build-program
    [[:FunDef "HelloWorld"
      {:args [{:id "x" :type :string}]
@@ -160,11 +197,7 @@
      {:args []
       :return-type :void}
      [:FunCall "HelloWorld" "Johnny"]]
-    [:FunCall "Main"]])
-
-
-
-  )
+    [:FunCall "Main"]]))
 
 
 

@@ -7,7 +7,7 @@
 "
 Prog := TopLevelExpr (ws expr-delim+ ws TopLevelExpr)*
 <TopLevelExpr> := FunDefExpr | FunCallExpr
-<Expr> := TopLevelExpr | InteropCallExpr | StringExpr | NumExpr | VarExpr
+<Expr> := TopLevelExpr | InteropCallExpr | StringExpr | NumExpr | VarExpr | BinOpExpr
 <expr-delim> := <';'> | newline
 <newline> := <'\n'>
 <ws> := <' '>*
@@ -18,6 +18,9 @@ Prog := TopLevelExpr (ws expr-delim+ ws TopLevelExpr)*
 VarExpr := symbol[TypeAnnotation]
 StringExpr := <'\"'> #'[.[^\"]]*' <'\"'>
 NumExpr := #'[0-9]+'
+VarDefExpr := VarExpr ws <'='> ws Expr
+BinOpExpr  := Expr ws BinOp ws Expr
+BinOp := '+' | '-' | '/' | '*'
 <TypeAnnotation> := ws <':'> ws TypeExpr
 FunDefExpr := <'fn'>ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=>'> ws body
 TypeExpr := 'string' | 'int'
@@ -35,18 +38,6 @@ fn helloWorld (s: string): string => { .concat(java.lang.String,  \"Hello\", s) 
 fn main ():string => { helloWorld(\"Johnny\")}
 main()")
 
-
-[:FunDef
- "helloWorld"
- [:params [:VarExpr "s" [:TypeExpr "string"]]]
- [:TypeExpr "string"]
- [:body
-  [:InteropCall
-   "concat"
-   "java.lang.String"
-   [:StringExpr "Hello"]
-   [:VarExpr "s"]]]]
-
 (defn trans-type [[_ type-expr]]
   ;; TODO for now this is good enough, but this needs to get smarter
   ;; once we want to support class names and java objects
@@ -60,7 +51,16 @@ main()")
 
 (defmethod trans-to-ast :StringExpr [[_ str-val]] str-val)
 
-(defmethod trans-to-ast :NumExpr [[_ num-val]] num-val )
+(defmethod trans-to-ast :NumExpr [[_ num-val]] (Integer/parseInt num-val))
+
+(defmethod trans-to-ast :BinOp [[_ op]]
+  (case op
+    "+" :AddInt
+    "-" :SubInt
+    "*" :MulInt
+    "/" :DivInt))
+
+(defmethod trans-to-ast :BinOpExpr [[_ arg0 bin-op arg1]] (mapv trans-to-ast [bin-op arg0 arg1]))
 
 (defmethod trans-to-ast :VarExpr [[_ id]] [:VarRef id])
 
@@ -116,9 +116,32 @@ fn NewMain(n: string):string => { HelloWorld(n) }"
    ;; figuring out how to parameterize this for different return types and command args would be useful!
    emitter/emit!)
 
-  (NewMain/invoke "Stefan")
+  (NewMain/invoke "Anne !")
 
 
+  (-> "fn f(x:int):int => 2*x + 2
+f(40)"
+   ;; leaving top level call expr for later
+   parser
+   parse-tree-to-ast
+   ast/build-program
+   ;; TODO this won't return since build-program creates entry-point with :return-type :void
+   ;; figuring out how to parameterize this for different return types and command args would be useful!
+   emitter/emit-and-run!)
+
+
+  (parser "fn f():int => 2 + 2*2")
+
+  [:FunDef
+   "helloWorld"
+   [:params [:VarExpr "s" [:TypeExpr "string"]]]
+   [:TypeExpr "string"]
+   [:body
+    [:InteropCall
+     "concat"
+     "java.lang.String"
+     [:StringExpr "Hello"]
+     [:VarExpr "s"]]]]
 
 
 
