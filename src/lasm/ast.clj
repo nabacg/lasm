@@ -88,6 +88,53 @@
     [env [[:ref-local {:var-id id}]]]
     (errorf "Unknown variable found %s" id)))
 
+(defn resolve-cmp-type [arg0 arg1 tenv] ;;TODO Implement me
+  :int)
+
+(defmethod ast-to-ir :If [[_ pred truthy-expr falsy-expr] tenv]
+  (let [[_ truthy-ir] (ast-to-ir truthy-expr tenv)
+        [_ falsy-ir]  (ast-to-ir falsy-expr tenv)
+        [cmp-op arg0 arg1] pred
+        cmp-type (resolve-cmp-type truthy-expr falsy-expr tenv)
+        [_ arg0] (ast-to-ir arg0 tenv)
+        [_ arg1] (ast-to-ir arg1 tenv)
+        truthy-lbl (name (gensym "truthy_lbl_"))
+        exit-lbl   (name (gensym "exit_lbl"))]
+    [tenv
+     (vec
+      (concat
+       arg0
+       arg1
+       [[:jump-cmp {:value truthy-lbl :compare-op cmp-op :compare-type cmp-type}]]
+       falsy-ir
+       [[:jump {:value exit-lbl}]]
+       [[:label {:value truthy-lbl}]]
+       truthy-ir
+       [[:label {:value exit-lbl}]]
+       ))]))
+
+
+(ast-to-ir
+ [:FunDef "Hello"
+  {:args [{:id "x" :type :int}]
+   :return-type :int}
+  [:If [:>  [:VarRef "x"] 119] 42 -1]]
+ {})
+
+(emit! {:fns [{:args [:int],
+               :return-type :int,
+               :body
+               [[:arg {:value 0}]
+                [:int {:value 119}]
+                [:jump-cmp {:value "truthy" :compare-op :> :compare-type :int}]
+                [:int {:value -1}]
+                [:jump {:value "exit"}]
+                [:label {:value "truthy"}]
+                [:int {:value 42}]
+                [:label {:value "exit"}]],
+               :class-name "Cond12"}]
+        :entry-point "Cond12"})
+
 (defmethod ast-to-ir :InteropCall [[_ method-name & method-args] tenv]
   (if-let [fn-type  (tenv method-name)]
     (let [{:keys [args return-type]} fn-type
@@ -155,6 +202,11 @@
 
   (ast-to-ir [:DivInt 23 1]
              {})
+
+
+
+
+  (Cond12/invoke 120)
 
 
   (ast-to-ir [:FunDef "Main"  {:args [{:id "x" :type :string}]

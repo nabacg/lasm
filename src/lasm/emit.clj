@@ -27,6 +27,16 @@
       nil (throw (ex-info "[resolve-type] NIL expr-type!"))
       (throw (ex-info "Unknown expr-type, resolve-type failed" expr-type)))))
 
+(defn resolve-cmp-type [op]
+  (case op
+    :=  GeneratorAdapter/EQ
+    :!= GeneratorAdapter/NE
+    :>  GeneratorAdapter/GT
+    :>= GeneratorAdapter/GE
+    :<  GeneratorAdapter/LT
+    :<= GeneratorAdapter/LE))
+
+
 (defn build-method [method-name return-type args]
   ;; Consider using method signature string and Method/getMethod like this
   ;; (Method/getMethod "java.lang.Object invoke (java.lang.Object)")
@@ -132,6 +142,27 @@
     :ref-local (let [var-handle (env (:var-id cmd))]
                  (.loadLocal ga var-handle)
                  env)
+    :label     (if-let [label (get env (:value cmd))]
+                 (do
+                   (.mark ga label)
+                   env)
+                 (let [label (.newLabel ga)]
+                   (.mark ga label)
+                   (assoc env (:value cmd) label)))
+    :jump-cmp (if-let [label (get env cmd)]
+                (do
+                  (.ifCmp ga (resolve-type (:compare-type cmd)) (resolve-cmp-type (:compare-op cmd)) label))
+                (let [label (.newLabel ga)]
+                  (.ifCmp ga (resolve-type (:compare-type cmd)) (resolve-cmp-type (:compare-op cmd)) label)
+                  (assoc env (:value cmd) label)))
+
+    :jump     (if-let [label (get env (:value cmd))]
+                (do
+                  (.goTo ga label)
+                  env)
+                (let [label (.newLabel ga)]
+                  (.goTo ga label)
+                  (assoc env (:value cmd) label)))
     (do
       (emit-instr! ga c)
       env)))
@@ -203,6 +234,51 @@
 
 
 (comment
+  [:FunDef "Hello"
+   {:args [{:id "x" :type :string}]
+    :return-type :string}
+   [:If [:>  [:VarRef "x"] 119] 42 -1]]
+
+  (emit! {:fns [{:args [:int],
+                 :return-type :int,
+                 :body
+                 [[:arg {:value 0}]
+                  [:int {:value 119}]
+                  [:jump-cmp {:value "truthy" :compare-op GeneratorAdapter/GT :compare-type Type/INT_TYPE}]
+                  [:int {:value -1}]
+                  [:jump {:value "exit"}]
+                  [:label {:value "truthy"}]
+                  [:int {:value 42}]
+                  [:label {:value "exit"}]],
+                 :class-name "Cond12"}]
+          :entry-point "Cond12"})
+
+
+  (emit! {:fns [{:class-name "Hello",
+                 :args [:int],
+                 :return-type :int,
+                 :body
+                 [[:arg {:value 0}]
+                  [:def-local {:var-id "x", :var-type :int}]
+                  [:ref-local {:var-id "x"}]
+                  [:int {:value 119}]
+                  [:jump-cmp
+                   {:value "truthy_lbl_9887", :compare-op :>, :compare-type :int}]
+                  [:int {:value -1}]
+                  [:jump {:value "exit_lbl9888"}]
+                  [:label {:value "truthy_lbl_9887"}]
+                  [:int {:value 42}]
+                  [:label {:value "exit_lbl9888"}]]}]
+          :entry-point "Hello"})
+
+  (Hello/invoke 20)
+
+
+
+
+
+
+
   ;; bril like syntax ?
   ;; https://capra.cs.cornell.edu/bril/lang/syntax.html
   (emit-and-run! {:fns [{:args [:int],
@@ -221,23 +297,23 @@
                          [:arg {:value 0}]
                          [:interop-call [:java.lang.String/concat [:string] :string]]],
                         :class-name "HelloWorld"}
-                       {:args [:int],
-                        :return-type :int,
-                        :body
-                        [[:int {:value 119}]
-                         [:arg {:value 0}]
-                         [:def-local {:var-id "x", :var-type :int}]
-                         [:ref-local {:var-id "x"}]
-                         [:int {:var-type :int, :value 13}]
-                         [:mul-int]
-                         [:sub-int]
-                         [:int {:value 2}]
-                         [:ref-local {:var-id "x"}]
-                         [:ref-local {:var-id "x"}]
-                         [:mul-int]
-                         [:mul-int]
-                         [:add-int]],
-                        :class-name "DoMath"}
+                        {:args [:int],
+                         :return-type :int,
+                         :body
+                         [[:int {:value 119}]
+                          [:arg {:value 0}]
+                          [:def-local {:var-id "x", :var-type :int}]
+                          [:ref-local {:var-id "x"}]
+                          [:int {:var-type :int, :value 13}]
+                          [:mul-int]
+                          [:sub-int]
+                          [:int {:value 2}]
+                          [:ref-local {:var-id "x"}]
+                          [:ref-local {:var-id "x"}]
+                          [:mul-int]
+                          [:mul-int]
+                          [:add-int]],
+                         :class-name "DoMath"}
                        {:args [],
                         :return-type :void,
                         :body
@@ -259,9 +335,7 @@
                          [:call-fn [:DoMath/invoke [:int] :int]]
                          [:print]],
                         :class-name "Main3"}]
-                  :entry-point "Main3"})
-
-  )
+                  :entry-point "Main3"}))
 
 
 

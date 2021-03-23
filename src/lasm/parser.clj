@@ -130,7 +130,11 @@ f(40)"
    emitter/emit-and-run!)
 
 
-  (parser "fn f():int => 2 + 2*2")
+  (-> (parser "fn f(x: int):int => 2 + f(x)
+f(1)")
+      parse-tree-to-ast
+      ast/build-program
+      emitter/emit-and-run!)
 
   [:FunDef
    "helloWorld"
