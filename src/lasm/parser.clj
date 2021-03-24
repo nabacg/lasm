@@ -110,6 +110,8 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
       ast/build-program
       emitter/emit!)
 
+  (Fib/invoke 10)
+
 
   (-> (parser "fn fact(x:int): int =>
   if x == 0
@@ -137,12 +139,12 @@ println(Main())")
 
 
   (->
-   "fn HelloWorld(x: string): string => { .concat(java.lang.String,  \"Hello \", x) }
+   "fn HelloWorld(x: string): string => { .concat(this java.lang.String,  \"Hello \", x) }
 fn NewMain(n: string):string => { HelloWorld(n) }"
    ;; leaving top level call expr for later
    parser
    parse-tree-to-ast
-   ast/build-program
+   ast/build-program #_
    ;; TODO this won't return since build-program creates entry-point with :return-type :void
    ;; figuring out how to parameterize this for different return types and command args would be useful!
    emitter/emit!)

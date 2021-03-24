@@ -17,8 +17,7 @@
          (= (first expr-type) :class))
     ;; This will most certainly not work long term, especially once we want to import between packages and stuff
     ;; but for now it allows recursive functions
-;;    (Type/getType (str "L" (second expr-type) ";"))
-  (Type/getType (Class/forName (second expr-type)))
+    (Type/getType (str "L" (string/replace (second expr-type) "." "/") ";"))
     :else
     (case expr-type
       :string (Type/getType String)
@@ -34,7 +33,7 @@
   (case op
     :== GeneratorAdapter/EQ
     :!= GeneratorAdapter/NE
-    :>  GeneratorAdapter/GT
+    :>  GeneratorAdapter/GTg
     :>= GeneratorAdapter/GE
     :<  GeneratorAdapter/LT
     :<= GeneratorAdapter/LE))
