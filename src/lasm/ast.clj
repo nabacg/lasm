@@ -2,24 +2,6 @@
   (:require [clojure.string :as string]))
 
 
-[:Prog
- [:VarDefExpr
-  [:VarExpr "f"]
-  [:LambdaExpr
-   [:params [:VarExpr "a" [:TypeExpr "Int"]]]
-   [:TypeExpr "Int"]
-   [:body [:BinOpExpr [:VarExpr "x"] [:BinOp "+"] [:VarExpr "a"]]]]]]
-
-
-[[:FunDef "HelloWorld"
-  {:args [{:sym "x" :type :string}]
-   :return-type :string}
-  [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
- [:FunDef "Main"
-  {:args [] :return-type :void}
-  [:FunCall "HelloWorld" "Johnny"]]
- [:FunCall "Main" ]]
-
 (defn error [expr & [msg ]]
   (throw (ex-info (str  "Invalid-expression: " msg)
                   {:expr expr
@@ -110,30 +92,7 @@
        [[:jump {:value exit-lbl}]]
        [[:label {:value truthy-lbl}]]
        truthy-ir
-       [[:label {:value exit-lbl}]]
-       ))]))
-
-
-(ast-to-ir
- [:FunDef "Hello"
-  {:args [{:id "x" :type :int}]
-   :return-type :int}
-  [:If [:>  [:VarRef "x"] 119] 42 -1]]
- {})
-
-(emit! {:fns [{:args [:int],
-               :return-type :int,
-               :body
-               [[:arg {:value 0}]
-                [:int {:value 119}]
-                [:jump-cmp {:value "truthy" :compare-op :> :compare-type :int}]
-                [:int {:value -1}]
-                [:jump {:value "exit"}]
-                [:label {:value "truthy"}]
-                [:int {:value 42}]
-                [:label {:value "exit"}]],
-               :class-name "Cond12"}]
-        :entry-point "Cond12"})
+       [[:label {:value exit-lbl}]]))]))
 
 (defmethod ast-to-ir :InteropCall [[_ method-name & method-args] tenv]
   (if-let [fn-type  (tenv method-name)]
@@ -146,13 +105,32 @@
                [:interop-call [(keyword method-name) args return-type]]))])
     (errorf "Unknown method signature for method: %s" method-name)))
 
-(defmethod ast-to-ir :FunCall [[_ fn-name & fn-args] tenv]
-  (if-let [fn-type  (tenv fn-name)]
+
+(defmethod ast-to-ir :StaticInteropCall [[_ method-name & method-args] tenv]
+  (if-let [fn-type  (tenv method-name)]
     (let [{:keys [args return-type]} fn-type
-          [_ args-ir] (map-ast-to-ir tenv fn-args)]
+          [_ args-ir] (map-ast-to-ir tenv method-args)]
       [tenv
        (if (empty? args-ir)
+         [[:static-interop-call [(keyword method-name) args return-type]]]
+         (conj args-ir
+               [:static-interop-call [(keyword method-name) args return-type]]))])
+    (errorf "Unknown method signature for method: %s" method-name)))
+
+(defmethod ast-to-ir :FunCall [[_ fn-name & fn-args] tenv]
+  (if-let [fn-type  (tenv fn-name)]
+    (let [{:keys [args return-type special-form]} fn-type
+          [_ args-ir] (map-ast-to-ir tenv fn-args)
+          ]
+      [tenv
+       (cond
+         (and special-form
+              (empty? args-ir)) [special-form]
+         special-form           (conj args-ir
+                                      [special-form])
+         (empty? args-ir)
          [[:call-fn [(keyword fn-name "invoke") args return-type]]]
+         :else
          (conj args-ir
                [:call-fn [(keyword fn-name "invoke") args return-type]]))])
     (errorf "Unknown function signature for fn-name: %s" fn-name fn-args)))
@@ -173,7 +151,10 @@
 
 (defn init-tenv []
   {"java.lang.String/concat" {:args [:string]
-                              :return-type :string}})
+                              :return-type :string}
+   "println"  {:args [:string]
+               :return-type :string
+               :special-form :print-str}})
 
 (defn build-program [exprs]
   (let [{:keys [FunDef] :as expr-by-type} (group-by first exprs)
@@ -187,7 +168,7 @@
                             [(into
                               [:FunDef main-fn-name
                                {:args []
-                                :return-type :int}]
+                                :return-type :void}]
                               top-level-exprs)])]
     ;;TODO check if all top level IR expr are maps of {FnNamestr Fn-expr}
     {:fns (conj (vec fn-defs-ir) main-fn-ir)
@@ -196,6 +177,32 @@
 
 
 (comment
+  ;; IF
+  (ast-to-ir
+   [:FunDef "Hello"
+    {:args [{:id "x" :type :int}]
+     :return-type :int}
+    [:If [:>  [:VarRef "x"] 119] 42 -1]]
+   {})
+
+  (require '[lasm.emit :as emit])
+
+  (emit/emit! {:fns [{:args [:int],
+                 :return-type :int,
+                 :body
+                 [[:arg {:value 0}]
+                  [:int {:value 119}]
+                  [:jump-cmp {:value "truthy" :compare-op :> :compare-type :int}]
+                  [:int {:value -1}]
+                  [:jump {:value "exit"}]
+                  [:label {:value "truthy"}]
+                  [:int {:value 42}]
+                  [:label {:value "exit"}]],
+                 :class-name "Cond12"}]
+               :entry-point "Cond12"})
+
+  (Cond12/invoke 120)
+
   (ast-to-ir [:FunCall "Main"]
              {"Main" {:args [{:id "x" :type :string}]
                       :return-type :string}})

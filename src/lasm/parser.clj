@@ -7,7 +7,7 @@
 "
 Prog := TopLevelExpr (ws expr-delim+ ws TopLevelExpr)*
 <TopLevelExpr> := FunDefExpr | FunCallExpr
-<Expr> := TopLevelExpr | InteropCallExpr | StringExpr | NumExpr | VarExpr | BinOpExpr
+<Expr> := TopLevelExpr | InteropCallExpr | StringExpr | NumExpr | VarExpr | BinOpExpr | EqOpExpr | IfExpr
 <expr-delim> := <';'> | newline
 <newline> := <'\n'>
 <ws> := <' '>*
@@ -19,24 +19,20 @@ VarExpr := symbol[TypeAnnotation]
 StringExpr := <'\"'> #'[.[^\"]]*' <'\"'>
 NumExpr := #'[0-9]+'
 VarDefExpr := VarExpr ws <'='> ws Expr
+IfExpr := <'if'> ws EqOpExpr wc  Expr wc <'else'> wc Expr wc
 BinOpExpr  := Expr ws BinOp ws Expr
-BinOp := '+' | '-' | '/' | '*'
+EqOpExpr  := Expr ws EqOp ws Expr
+BinOp :=  '+' | '-' | '/' | '*'
+EqOp := '>' | '<' | '>=' | '<=' | '==' | '!='
 <TypeAnnotation> := ws <':'> ws TypeExpr
 FunDefExpr := <'fn'>ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=>'> ws body
 TypeExpr := 'string' | 'int'
 params := VarExpr? (ws <','> ws VarExpr)*
 body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
 FunCallExpr :=  symbol <'('> comma-delimited-exprs? <')'>
-InteropCallExpr :=  <'.'>symbol <'('> symbol ws comma ws  comma-delimited-exprs? <')'>"))
+StaticInteropCallExpr :=  <'.'>symbol <'('> symbol ws comma ws  comma-delimited-exprs? <')'>
+InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-delimited-exprs? <')'>"))
 
-;; ^java.lang.String "Hello ".concat(x)
-;;java.lang.String->concat(\"Hello\", x)
-
-(parser
-"fn h(x: string): string =>  { \"AAAA\" }
-fn helloWorld (s: string): string => { .concat(java.lang.String,  \"Hello\", s) }
-fn main ():string => { helloWorld(\"Johnny\")}
-main()")
 
 (defn trans-type [[_ type-expr]]
   ;; TODO for now this is good enough, but this needs to get smarter
@@ -60,9 +56,17 @@ main()")
     "*" :MulInt
     "/" :DivInt))
 
+(defmethod trans-to-ast :EqOp [[_ op]]
+  (keyword op))
+
 (defmethod trans-to-ast :BinOpExpr [[_ arg0 bin-op arg1]] (mapv trans-to-ast [bin-op arg0 arg1]))
 
+(defmethod trans-to-ast :EqOpExpr [[_ arg0 eq-op arg1]] (mapv trans-to-ast [eq-op arg0 arg1]))
+
 (defmethod trans-to-ast :VarExpr [[_ id]] [:VarRef id])
+
+(defmethod trans-to-ast :IfExpr [[_ & exprs]]
+  (into [:If] (mapv trans-to-ast exprs)))
 
 (defmethod trans-to-ast :FunDefExpr [[_ fn-name [_ & params] return-type  [_ & body]]]
   (into
@@ -81,8 +85,14 @@ main()")
    [:InteropCall (str class-name "/" method-name)]
    (mapv trans-to-ast args)))
 
+(defmethod trans-to-ast :StaticInteropCallExpr [[_ method-name class-name & args]]
+  (into
+   [:StaticInteropCall (str class-name "/" method-name)]
+   (mapv trans-to-ast args)))
+
 (defn parse-tree-to-ast [[_ & exprs]]
   (mapv trans-to-ast exprs))
+
 
 
 (comment
@@ -90,13 +100,34 @@ main()")
            '[lasm.emit :as emitter])
 
 
+  ;; First Fibonacci !!!
+  (-> (parser "fn Fib(x:int): int =>
+  if x <= 2
+     1
+  else
+      Fib(x-1) + Fib(x-2)")
+      parse-tree-to-ast
+      ast/build-program
+      emitter/emit!)
+
+
+  (-> (parser "fn fact(x:int): int =>
+  if x == 0
+     1
+  else
+      x * fact(x - 1)")
+      parse-tree-to-ast
+      ast/build-program
+      emitter/emit!)
+
+
+  (fact/invoke 9)
 
   (->
-   "fn HelloWorld(x: string): string => { .concat(java.lang.String,  \"Hello \", x) }
+   (parser   "fn HelloWorld(x: string): string => { .concat(this java.lang.String,  \"Hello \", x) }
 fn Main():string => { HelloWorld(\"Johnny\") }
-Main()"
+println(Main())")
    ;; leaving top level call expr for later
-   parser
    parse-tree-to-ast
    ast/build-program
    ;; TODO this won't return since build-program creates entry-point with :return-type :void
@@ -136,6 +167,7 @@ f(1)")
       ast/build-program
       emitter/emit-and-run!)
 
+
   [:FunDef
    "helloWorld"
    [:params [:VarExpr "s" [:TypeExpr "string"]]]
@@ -149,7 +181,7 @@ f(1)")
 
 
 
-                                        ;=>
+  ;; =>
   [[:FunDef "HelloWorld"
     {:args [{:id "x" :type :string}]
      :return-type :string}

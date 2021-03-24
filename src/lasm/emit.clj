@@ -15,7 +15,10 @@
     expr-type
     (and (vector? expr-type)
          (= (first expr-type) :class))
-    (Type/getType (Class/forName (second expr-type)))
+    ;; This will most certainly not work long term, especially once we want to import between packages and stuff
+    ;; but for now it allows recursive functions
+;;    (Type/getType (str "L" (second expr-type) ";"))
+  (Type/getType (Class/forName (second expr-type)))
     :else
     (case expr-type
       :string (Type/getType String)
@@ -29,7 +32,7 @@
 
 (defn resolve-cmp-type [op]
   (case op
-    :=  GeneratorAdapter/EQ
+    :== GeneratorAdapter/EQ
     :!= GeneratorAdapter/NE
     :>  GeneratorAdapter/GT
     :>= GeneratorAdapter/GE
@@ -58,9 +61,6 @@
 (defn build-invoke-static [cmd]
   [:invoke-static (build-invoke-props cmd)])
 
-(defn build-invoke-interop [cmd]
-  [:invoke-virtual (build-invoke-props cmd)])
-
 (defn emit-print [^GeneratorAdapter ga {:keys [args] :or {args [:int]}}]
   (let [out-stream-type (Type/getType ^java.lang.Class
                            (.getGenericType
@@ -74,6 +74,7 @@
       (.swap ga)
       (.invokeVirtual ga  out-stream-type
                       (build-method "println" :void args))))
+
 
 (defn emit-instr! [^GeneratorAdapter ga [cmd-type cmd]]
   (case cmd-type
@@ -93,7 +94,9 @@
     :call-fn
     (recur ga (build-invoke-static cmd))
     :interop-call
-    (recur ga (build-invoke-interop cmd))
+    (recur ga [:invoke-virtual (build-invoke-props cmd)])
+    :static-interop-call
+    (recur ga [:invoke-static  (build-invoke-props cmd)])
     :arg
     (.loadArg ga (:value cmd))
     :math
@@ -131,7 +134,9 @@
     :return
     (.returnValue ga)
     :print
-    (emit-print ga cmd)))
+    (emit-print ga cmd)
+    :print-str
+    (emit-print ga {:args [:string]})))
 
 (defn emit-with-env [^GeneratorAdapter ga env [cmd-type cmd :as c]]
   (case cmd-type
