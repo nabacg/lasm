@@ -33,7 +33,7 @@
   (case op
     :== GeneratorAdapter/EQ
     :!= GeneratorAdapter/NE
-    :>  GeneratorAdapter/GTg
+    :>  GeneratorAdapter/GT
     :>= GeneratorAdapter/GE
     :<  GeneratorAdapter/LT
     :<= GeneratorAdapter/LE))

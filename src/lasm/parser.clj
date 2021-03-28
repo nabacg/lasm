@@ -45,9 +45,9 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
 
 (defmulti  trans-to-ast first)
 
-(defmethod trans-to-ast :StringExpr [[_ str-val]] str-val)
+(defmethod trans-to-ast :StringExpr [[_ str-val]] [:StringExpr  str-val])
 
-(defmethod trans-to-ast :NumExpr [[_ num-val]] (Integer/parseInt num-val))
+(defmethod trans-to-ast :NumExpr [[_ num-val]] [:IntExpr (Integer/parseInt num-val)])
 
 (defmethod trans-to-ast :BinOp [[_ op]]
   (case op
@@ -101,26 +101,29 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
 
 
   ;; First Fibonacci !!!
+  (-> (parser "fn fib(x:int): int =>
+  if x <= 2
+     1
+  else
+      fib(x-1) + fib(x-2)")
+      parse-tree-to-ast
+      ast/build-program
+      emitter/emit!)
+
+  (fib/invoke 10)
+
+
   (-> (parser "fn Fib(x:int): int =>
   if x <= 2
      1
   else
-      Fib(x-1) + Fib(x-2)")
+      Fib(x-1) + Fib(x-2)
+\"Hello\"
+  println(Fib(4))")
       parse-tree-to-ast
-      ast/build-program
+      ast/build-program #_
       emitter/emit!)
 
-  (Fib/invoke 10)
-
-
-  (-> (parser "fn fact(x:int): int =>
-  if x == 0
-     1
-  else
-      x * fact(x - 1)")
-      parse-tree-to-ast
-      ast/build-program
-      emitter/emit!)
 
 
   (fact/invoke 9)

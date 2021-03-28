@@ -12,10 +12,7 @@
                   {:msg msg})))
 
 
-(defmulti ast-to-ir (fn [expr _]
-                      (cond
-                        (vector? expr)  (first expr)
-                        :else (type expr))))
+(defmulti ast-to-ir (fn [expr _] (first expr)))
 
 (defn args-to-locals [args]
   (vec (mapcat identity
@@ -56,13 +53,10 @@
                ops)
          [:div-int])])
 
-(defmethod ast-to-ir java.lang.String [str-val env]
+(defmethod ast-to-ir :StringExpr [[_ str-val] env]
   [env [[:string {:value str-val}]]])
 
-(defmethod ast-to-ir java.lang.Long [int-val env]
-  [env [[:int {:value int-val}]]])
-
-(defmethod ast-to-ir java.lang.Integer [int-val env]
+(defmethod ast-to-ir :IntExpr [[_  int-val] env]
   [env [[:int {:value int-val}]]])
 
 (defmethod ast-to-ir :VarRef [[_ id] env]
