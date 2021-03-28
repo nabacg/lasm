@@ -62,17 +62,17 @@
 
 (defn emit-print [^GeneratorAdapter ga {:keys [args] :or {args [:int]}}]
   (let [out-stream-type (Type/getType ^java.lang.Class
-                           (.getGenericType
-                            (.getDeclaredField
-                             (Class/forName "java.lang.System") "out")))]
-      (.dup ga)
-      (.getStatic ga
-                  (resolve-type [:class "java.lang.System"])
-                  "out"
-                  out-stream-type)
-      (.swap ga)
-      (.invokeVirtual ga  out-stream-type
-                      (build-method "println" :void args))))
+                                      (.getGenericType
+                                       (.getDeclaredField
+                                        (Class/forName "java.lang.System") "out")))]
+    (.dup ga)
+    (.getStatic ga
+                (resolve-type [:class "java.lang.System"])
+                "out"
+                out-stream-type)
+    (.swap ga)
+    (.invokeVirtual ga  out-stream-type
+                    (build-method "println" :void args))))
 
 
 (defn emit-instr! [^GeneratorAdapter ga [cmd-type cmd]]

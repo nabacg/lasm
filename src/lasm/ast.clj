@@ -59,10 +59,25 @@
 (defmethod ast-to-ir :IntExpr [[_  int-val] env]
   [env [[:int {:value int-val}]]])
 
-(defmethod ast-to-ir :VarRef [[_ id] env]
-  (if-let [{:keys [var-type]} (env id)]
-    [env [[:ref-local {:var-id id}]]]
-    (errorf "Unknown variable found %s" id)))
+(defmethod ast-to-ir :VarRef [[_ {:keys [var-id var-type]}] env]
+  (let [declared-type var-type
+        var-type (env var-id)]
+    (cond
+      (and (nil? declared-type) (nil? var-type))
+      (errorf "Unknown variable found %s" var-id)
+
+      (and declared-type var-type (not= declared-type var-type))
+      (errorf "Incompatible variable types found, declared-type: %s vs env-type: %s" declared-type var-type)
+      :else
+      [env [[:ref-local {:var-id var-id
+                         ;; if at least one type is not empty, use it for var-type
+                         :var-type (or var-type declared-type)}]]])))
+
+(defmethod ast-to-ir :VarDef [[_ {:keys [var-id var-type]} val-expr] tenv]
+  (let [[_ val-ir] (ast-to-ir val-expr tenv)]
+    [(assoc tenv var-id var-type)
+     (conj val-ir
+           [:def-local {:var-id var-id :var-type var-type}])]))
 
 (defn resolve-cmp-type [arg0 arg1 tenv] ;;TODO Implement me
   :int)
@@ -146,9 +161,12 @@
 (defn init-tenv []
   {"java.lang.String/concat" {:args [:string]
                               :return-type :string}
-   "println"  {:args [:string]
+   "printstr"  {:args [:string]
                :return-type :string
-               :special-form :print-str}})
+               :special-form :print-str}
+   "printint"  {:args [:int]
+                :return-type :int
+                :special-form :print}})
 
 (defn build-program [exprs]
   (let [{:keys [FunDef] :as expr-by-type} (group-by first exprs)

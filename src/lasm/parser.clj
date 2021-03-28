@@ -6,7 +6,7 @@
   (insta/parser
 "
 Prog := TopLevelExpr (ws expr-delim+ ws TopLevelExpr)*
-<TopLevelExpr> := FunDefExpr | FunCallExpr
+<TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr
 <Expr> := TopLevelExpr | InteropCallExpr | StringExpr | NumExpr | VarExpr | BinOpExpr | EqOpExpr | IfExpr
 <expr-delim> := <';'> | newline
 <newline> := <'\n'>
@@ -45,6 +45,8 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
 
 (defmulti  trans-to-ast first)
 
+(defmethod trans-to-ast :TypeExpr [type-expr] (trans-type type-expr))
+
 (defmethod trans-to-ast :StringExpr [[_ str-val]] [:StringExpr  str-val])
 
 (defmethod trans-to-ast :NumExpr [[_ num-val]] [:IntExpr (Integer/parseInt num-val)])
@@ -63,7 +65,15 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
 
 (defmethod trans-to-ast :EqOpExpr [[_ arg0 eq-op arg1]] (mapv trans-to-ast [eq-op arg0 arg1]))
 
-(defmethod trans-to-ast :VarExpr [[_ id]] [:VarRef id])
+(defmethod trans-to-ast :VarExpr [[_ id type-expr]]
+  (if type-expr
+    [:VarRef  {:var-id id
+               :var-type (trans-to-ast type-expr)}]
+    [:VarRef {:var-id id}]))
+
+(defmethod trans-to-ast :VarDefExpr [[_ var-expr val-expr]]
+  (let [[_ props] (trans-to-ast var-expr)]
+    [:VarDef props (trans-to-ast val-expr)]))
 
 (defmethod trans-to-ast :IfExpr [[_ & exprs]]
   (into [:If] (mapv trans-to-ast exprs)))
@@ -94,7 +104,6 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
   (mapv trans-to-ast exprs))
 
 
-
 (comment
   (require '[lasm.ast :as ast]
            '[lasm.emit :as emitter])
@@ -110,7 +119,7 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
       ast/build-program
       emitter/emit!)
 
-  (fib/invoke 10)
+  (fib/invoke 12)
 
 
   (-> (parser "fn Fib(x:int): int =>
@@ -118,22 +127,38 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
      1
   else
       Fib(x-1) + Fib(x-2)
-\"Hello\"
-  println(Fib(4))")
+  s:string = \"Hello\"
+  r:int = Fib(5)
+  printstr(s)
+  printstr(\"Result of Fib(5) is: \")
+  printint(r)")
       parse-tree-to-ast
-      ast/build-program #_
+      ast/build-program
+      emitter/emit-and-run!)
+
+
+
+
+  (-> (parser "fn fact(x:int): int =>
+  if x <= 1
+     1
+  else
+      x *fact(x-1)
+  fact(4)")
+      parse-tree-to-ast
+      ast/build-program
       emitter/emit!)
 
 
 
-  (fact/invoke 9)
+  (fact/invoke 10)
 
   (->
    (parser   "fn HelloWorld(x: string): string => { .concat(this java.lang.String,  \"Hello \", x) }
 fn Main():string => { HelloWorld(\"Johnny\") }
-println(Main())")
+printstr(Main())")
    ;; leaving top level call expr for later
-   parse-tree-to-ast
+   parse-tree-to-ast #_#_
    ast/build-program
    ;; TODO this won't return since build-program creates entry-point with :return-type :void
    ;; figuring out how to parameterize this for different return types and command args would be useful!
@@ -147,7 +172,7 @@ fn NewMain(n: string):string => { HelloWorld(n) }"
    ;; leaving top level call expr for later
    parser
    parse-tree-to-ast
-   ast/build-program #_
+   ast/build-program
    ;; TODO this won't return since build-program creates entry-point with :return-type :void
    ;; figuring out how to parameterize this for different return types and command args would be useful!
    emitter/emit!)
