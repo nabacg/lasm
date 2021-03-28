@@ -119,7 +119,7 @@
     :int
     (.push ga (int (:value cmd)))
     :string
-    (.push ga ^java.lang.String (:value cmd))
+    (.push ga ^String (:value cmd))
     :put-field
     (.putField ga (:owner cmd) (:name cmd) (resolve-type (:field-type cmd)))
     :dup
@@ -374,6 +374,13 @@
             :body [[:string {:value "Hello "}]
                    [:arg {:value 0}]
                    [:interop-call [:java.lang.String/concat [ :string] :string]]]})
+
+  (make-fn {:class-name "StrConcat2"
+            :args [:string]
+            :return-type :string
+            :body [[:string {:value "Hello "}]
+                   [:arg {:value 0}]
+                   [:interop-call [:java.lang.String/concat [[:class "java.lang.String"]] :string]]]})
 
   (StrConcat/invoke "Johnny")
 

@@ -7,7 +7,7 @@
 "
 Prog := TopLevelExpr (ws expr-delim+ ws TopLevelExpr)*
 <TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr
-<Expr> := TopLevelExpr | InteropCallExpr | StringExpr | NumExpr | VarExpr | BinOpExpr | EqOpExpr | IfExpr
+<Expr> := TopLevelExpr | InteropCallExpr | StaticInteropCallExpr | StringExpr | NumExpr | VarExpr | BinOpExpr | EqOpExpr | IfExpr
 <expr-delim> := <';'> | newline
 <newline> := <'\n'>
 <ws> := <' '>*
@@ -92,12 +92,15 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
 
 (defmethod trans-to-ast :InteropCallExpr [[_ method-name class-name & args]]
   (into
-   [:InteropCall (str class-name "/" method-name)]
+   [:InteropCall {:class-name  class-name
+                  :method-name method-name}]
    (mapv trans-to-ast args)))
 
 (defmethod trans-to-ast :StaticInteropCallExpr [[_ method-name class-name & args]]
   (into
-   [:StaticInteropCall (str class-name "/" method-name)]
+   [:InteropCall {:class-name  class-name
+                  :method-name method-name
+                  :static? true}]
    (mapv trans-to-ast args)))
 
 (defn parse-tree-to-ast [[_ & exprs]]
@@ -111,7 +114,7 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
 
   ;; First Fibonacci !!!
   (-> (parser "fn fib(x:int): int =>
-  if x <= 2
+  if x < 2
      1
   else
       fib(x-1) + fib(x-2)")
@@ -119,7 +122,9 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
       ast/build-program
       emitter/emit!)
 
-  (fib/invoke 12)
+  (fib/invoke 15)
+
+  (map #(fib/invoke %) (range 10))
 
 
   (-> (parser "fn Fib(x:int): int =>
@@ -128,9 +133,10 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
   else
       Fib(x-1) + Fib(x-2)
   s:string = \"Hello\"
-  r:int = Fib(5)
+
+  r:int = Fib(15)
   printstr(s)
-  printstr(\"Result of Fib(5) is: \")
+  printstr(\"Result of Fib(15) is: \")
   printint(r)")
       parse-tree-to-ast
       ast/build-program
@@ -145,7 +151,7 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
   else
       x *fact(x-1)
   fact(4)")
-      parse-tree-to-ast
+      parse-tree-to-ast #_#_
       ast/build-program
       emitter/emit!)
 
@@ -158,7 +164,7 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
 fn Main():string => { HelloWorld(\"Johnny\") }
 printstr(Main())")
    ;; leaving top level call expr for later
-   parse-tree-to-ast #_#_
+   parse-tree-to-ast
    ast/build-program
    ;; TODO this won't return since build-program creates entry-point with :return-type :void
    ;; figuring out how to parameterize this for different return types and command args would be useful!
@@ -198,25 +204,4 @@ f(1)")
       emitter/emit-and-run!)
 
 
-  [:FunDef
-   "helloWorld"
-   [:params [:VarExpr "s" [:TypeExpr "string"]]]
-   [:TypeExpr "string"]
-   [:body
-    [:InteropCall
-     "concat"
-     "java.lang.String"
-     [:StringExpr "Hello"]
-     [:VarExpr "s"]]]]
-
-
-
-  ;; =>
-  [[:FunDef "HelloWorld"
-    {:args [{:id "x" :type :string}]
-     :return-type :string}
-    [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
-   [:FunDef "Main"
-    {:args []
-     :return-type :void}
-    [:FunCall "HelloWorld" "Johnny"]]])
+)

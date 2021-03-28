@@ -1,5 +1,6 @@
 (ns lasm.ast
-  (:require [clojure.string :as string]))
+  (:require [clojure.string :as string]
+            [clojure.reflect :as reflect]))
 
 
 (defn error [expr & [msg ]]
@@ -15,11 +16,14 @@
 (defmulti ast-to-ir (fn [expr _] (first expr)))
 
 (defn args-to-locals [args]
-  (vec (mapcat identity
-               (map-indexed (fn [i {:keys [id type]}]
-                              [[:arg {:value i}]
-                               [:def-local {:var-id id :var-type type}]])
-                            args))))
+  (vec
+   (mapcat
+    identity
+    (map-indexed
+     (fn [i {:keys [id type]}]
+       [[:arg {:value i}]
+        [:def-local {:var-id id :var-type type}]])
+     args))))
 
 (defn map-ast-to-ir [env exprs]
   (reduce (fn [[env irs] expr]
@@ -103,28 +107,47 @@
        truthy-ir
        [[:label {:value exit-lbl}]]))]))
 
-(defmethod ast-to-ir :InteropCall [[_ method-name & method-args] tenv]
-  (if-let [fn-type  (tenv method-name)]
-    (let [{:keys [args return-type]} fn-type
-          [_ args-ir] (map-ast-to-ir tenv method-args)]
-      [tenv
-       (if (empty? args-ir)
-         [[:interop-call [(keyword method-name) args return-type]]]
-         (conj args-ir
-               [:interop-call [(keyword method-name) args return-type]]))])
-    (errorf "Unknown method signature for method: %s" method-name)))
+
+(defn to-ir-type [java-type-sym]
+  (let [type-name (name java-type-sym)]
+    ;; TODO this should really be a check on whether this is a simple type by (#{int float long double char} ) etc.
+    (if (string/includes? type-name ".")
+      [:class type-name]
+      (keyword type-name))))
 
 
-(defmethod ast-to-ir :StaticInteropCall [[_ method-name & method-args] tenv]
-  (if-let [fn-type  (tenv method-name)]
-    (let [{:keys [args return-type]} fn-type
-          [_ args-ir] (map-ast-to-ir tenv method-args)]
+(defn lookup-interop-method-signature [class-name method-name & args-maybe?]
+
+  (->> (reflect/reflect (Class/forName class-name))
+       :members
+       (filter (comp #{(symbol method-name)} :name))
+       (map (fn [{:keys [return-type parameter-types]}]
+              {:return-type (to-ir-type return-type)
+               :args (mapv to-ir-type parameter-types)}))
+       ;;TODO also use args-maybe? to filter results on matching arity and parameter types!
+
+       first))
+
+(comment
+  ;; TODO needs a lot of work this
+  (lookup-interop-method-signature "java.lang.String" "concat")
+  )
+
+
+(defmethod ast-to-ir :InteropCall [[_ {:keys [class-name method-name static?]} & method-args] tenv]
+  (let [{:keys [args return-type] :as env-type}  (tenv method-name)
+        jvm-type (lookup-interop-method-signature class-name method-name)
+        [_ args-ir]      (map-ast-to-ir tenv method-args)
+        ir-op   (if static? :static-interop-call :interop-call)
+        {:keys [return-type args]}  (merge-with #(or %1 %2)   jvm-type env-type )]
+
+    (println "env-type= " env-type " jvm-type= " jvm-type)
+    (if  (or env-type jvm-type)
       [tenv
-       (if (empty? args-ir)
-         [[:static-interop-call [(keyword method-name) args return-type]]]
-         (conj args-ir
-               [:static-interop-call [(keyword method-name) args return-type]]))])
-    (errorf "Unknown method signature for method: %s" method-name)))
+       (conj (vec args-ir) ;; in case args-ir is empty, thus '()
+             [ir-op [(keyword (str class-name "/" method-name)) args return-type]])]
+      (errorf "Unknown method signature for class/method: %s/%s" class-name method-name))))
+
 
 (defmethod ast-to-ir :FunCall [[_ fn-name & fn-args] tenv]
   (if-let [fn-type  (tenv fn-name)]
@@ -194,7 +217,9 @@
    [:FunDef "Hello"
     {:args [{:id "x" :type :int}]
      :return-type :int}
-    [:If [:>  [:VarRef "x"] 119] 42 -1]]
+    [:If [:>  [:VarRef {:var-id "x"}] [:IntExpr {:value 119}]]
+     [:IntExpr {:value  42}]
+     [:IntExpr {:value -1}]]]
    {})
 
   (require '[lasm.emit :as emit])
