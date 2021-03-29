@@ -108,35 +108,59 @@
        [[:label {:value exit-lbl}]]))]))
 
 
-(defn to-ir-type [java-type-sym]
+(defn jvm-type-to-ir [java-type-sym]
   (let [type-name (name java-type-sym)]
     ;; TODO this should really be a check on whether this is a simple type by (#{int float long double char} ) etc.
     (if (string/includes? type-name ".")
       [:class type-name]
       (keyword type-name))))
 
+(defn ast-expr-to-ir-type [[expr-type & exprs] tenv]
+  (case expr-type
+      ;; TODO this clearly needs loads of work
+      :IntExpr :int
+      :StringExpr :string
+      :AddInt :int
+      :SubInt :int
+      :MulInt :int
+      :DivInt :int
+      :FunCall (if-let [{:keys [return-type]} (tenv (first exprs))]
+                     return-type)))
 
-(defn lookup-interop-method-signature [class-name method-name & args-maybe?]
-
+(defn lookup-interop-method-signature [class-name method-name call-arg-exprs tenv]
   (->> (reflect/reflect (Class/forName class-name))
        :members
        (filter (comp #{(symbol method-name)} :name))
-       (map (fn [{:keys [return-type parameter-types]}]
-              {:return-type (to-ir-type return-type)
-               :args (mapv to-ir-type parameter-types)}))
+       (map (fn [{:keys [return-type parameter-types name]}]
+              {:return-type (jvm-type-to-ir return-type)
+               :args (mapv jvm-type-to-ir parameter-types)
+               :name (clojure.core/name name)}))
        ;;TODO also use args-maybe? to filter results on matching arity and parameter types!
-
+       (filter (fn [{:keys [args]}]
+                 (and (= (count args)
+                         (count call-arg-exprs))
+                      (every? true?
+                              (map (fn [param arg-e]
+                                     (= param
+                                        (ast-expr-to-ir-type arg-e tenv)))
+                                   args
+                                   call-arg-exprs)))))
        first))
 
 (comment
   ;; TODO needs a lot of work this
-  (lookup-interop-method-signature "java.lang.String" "concat")
+
+  (lookup-interop-method-signature "java.lang.Math"  "abs"
+                                   [[:FunCallExpr "f"  [:IntExpr 2]]]
+                                   {"f" {:args [:int]
+                                                                                                    :return-type :int}})
+
   )
 
 
 (defmethod ast-to-ir :InteropCall [[_ {:keys [class-name method-name static?]} & method-args] tenv]
   (let [{:keys [args return-type] :as env-type}  (tenv method-name)
-        jvm-type (lookup-interop-method-signature class-name method-name)
+        jvm-type (lookup-interop-method-signature class-name method-name method-args tenv)
         [_ args-ir]      (map-ast-to-ir tenv method-args)
         ir-op   (if static? :static-interop-call :interop-call)
         {:keys [return-type args]}  (merge-with #(or %1 %2)   jvm-type env-type )]

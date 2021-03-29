@@ -187,15 +187,12 @@ fn NewMain(n: string):string => { HelloWorld(n) }"
 
 
   (-> "fn f(x:int):int => 2*x + 2
-f(40)"
+printint(.abs(java.lang.Math, 100 - f(2+8*100)))"
    ;; leaving top level call expr for later
-   parser
+      parser
    parse-tree-to-ast
    ast/build-program
-   ;; TODO this won't return since build-program creates entry-point with :return-type :void
-   ;; figuring out how to parameterize this for different return types and command args would be useful!
    emitter/emit-and-run!)
-
 
   (-> (parser "fn f(x: int):int => 2 + f(x)
 f(1)")
