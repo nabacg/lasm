@@ -47,9 +47,9 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
 
 (defmethod trans-to-ast :TypeExpr [type-expr] (trans-type type-expr))
 
-(defmethod trans-to-ast :StringExpr [[_ str-val]] [:StringExpr  str-val])
+(defmethod trans-to-ast :StringExpr [[_ str-val]] [:String str-val])
 
-(defmethod trans-to-ast :NumExpr [[_ num-val]] [:IntExpr (Integer/parseInt num-val)])
+(defmethod trans-to-ast :NumExpr [[_ num-val]] [:Int (Integer/parseInt num-val)])
 
 (defmethod trans-to-ast :BinOp [[_ op]]
   (case op
@@ -138,10 +138,17 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
   printstr(s)
   printstr(\"Result of Fib(15) is: \")
   printint(r)")
+      parse-tree-to-ast #_
+      ast/build-program #_
+      emitter/emit-and-run!)
+
+  (-> "fn f(x:int):int => 2*x + 2
+printint(.abs(java.lang.Math, 100 - f(2+8*100)))"
+      ;; leaving top level call expr for later
+      parser
       parse-tree-to-ast
       ast/build-program
       emitter/emit-and-run!)
-
 
 
 
@@ -157,12 +164,12 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
 
 
 
-  (fact/invoke 10)
+  (fact/invoke 15)
 
   (->
    (parser   "fn HelloWorld(x: string): string => { .concat(this java.lang.String,  \"Hello \", x) }
 fn Main():string => { HelloWorld(\"Johnny\") }
-printstr(Main())")
+printstr(.replace(this java.lang.String, Main(), \"H\", \"->\"))")
    ;; leaving top level call expr for later
    parse-tree-to-ast
    ast/build-program
@@ -186,14 +193,10 @@ fn NewMain(n: string):string => { HelloWorld(n) }"
   (NewMain/invoke "Anne !")
 
 
-  (-> "fn f(x:int):int => 2*x + 2
-printint(.abs(java.lang.Math, 100 - f(2+8*100)))"
-   ;; leaving top level call expr for later
-      parser
-   parse-tree-to-ast
-   ast/build-program
-   emitter/emit-and-run!)
 
+
+
+  ;; STACK OVERFLOW, unbounded recursion here
   (-> (parser "fn f(x: int):int => 2 + f(x)
 f(1)")
       parse-tree-to-ast
