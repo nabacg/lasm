@@ -80,8 +80,9 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
 
 (defmethod trans-to-ast :FunDefExpr [[_ fn-name [_ & params] return-type  [_ & body]]]
   (into
-   [:FunDef fn-name {:args (mapv trans-param params)
-                     :return-type (trans-type return-type)}]
+   [:FunDef {:args (mapv trans-param params)
+             :fn-name fn-name
+             :return-type (trans-type return-type)}]
    (mapv trans-to-ast body)))
 
 (defmethod trans-to-ast :FunCallExpr [[_ fn-name & arg-exprs]]

@@ -187,6 +187,7 @@
 
 
 (defmethod ast-to-ir :InteropCall [[_ {:keys [class-name method-name static?]} & method-args] tenv]
+;;  (println ":InteropCall=" [class-name method-name static?] " method-args = " method-args " tenv= " tenv)
   (let [{:keys [args return-type] :as env-type}  (tenv method-name)
         ;; TODO should interop take a map with params instead positional?
         jvm-type (lookup-interop-method-signature class-name method-name method-args static? tenv)
@@ -222,7 +223,8 @@
     (errorf "Unknown function signature for fn-name: %s" fn-name fn-args)))
 
 
-(defmethod ast-to-ir :FunDef [[_ fn-name {:keys [args return-type]} & body] tenv]
+(defmethod ast-to-ir :FunDef [[_ {:keys [args return-type fn-name]} & body] tenv]
+;;  (println [args return-type fn-name] body )
   (let [arg-types (mapv :type args)
         tenv'     (assoc tenv fn-name {:args arg-types :return-type return-type})
         tenv-with-params (into tenv' (map (juxt :id :type) args))
@@ -252,11 +254,12 @@
         ;; TODO does this really need to be that complicated? we could probably return a {FnName -> Fn} map from above fn
         ;fn-defs-ir         (apply merge fn-defs-ir)
         main-fn-name       (name (gensym "Main_"))
-        [_ [main-fn-ir]]     (map-ast-to-ir
+        [_ [main-fn-ir]]   (map-ast-to-ir
                             tenv
                             [(into
-                              [:FunDef main-fn-name
+                              [:FunDef
                                {:args []
+                                :fn-name main-fn-name
                                 :return-type :void}]
                               top-level-exprs)])]
     ;;TODO check if all top level IR expr are maps of {FnNamestr Fn-expr}
@@ -268,12 +271,13 @@
 (comment
   ;; IF
   (ast-to-ir
-   [:FunDef "Hello"
+   [:FunDef
     {:args [{:id "x" :type :int}]
+     :fn-name "Hello"
      :return-type :int}
-    [:If [:>  [:VarRef {:var-id "x"}] [:IntExpr {:value 119}]]
-     [:IntExpr {:value  42}]
-     [:IntExpr {:value -1}]]]
+    [:If [:>  [:VarRef {:var-id "x"}] [:Int{:value 119}]]
+     [:Int {:value  42}]
+     [:Int {:value -1}]]]
    {})
 
   (require '[lasm.emit :as emit])
@@ -302,52 +306,83 @@
              {})
 
 
-
+  [:InteropCall
+   {:class-name "java.lang.Math", :method-name "abs", :static? true}
+   [:SubInt
+    [:Int 100]
+    [:FunCall
+     "f"
+     [:AddInt [:Int 2] [:MulInt [:Int 8] [:Int 100]]]]]]
 
   (Cond12/invoke 120)
 
 
-  (ast-to-ir [:FunDef "Main"  {:args [{:id "x" :type :string}]
-                               :return-type :string}
+  (ast-to-ir [:FunDef  {:fn-name "Main"
+                        :args [{:id "x" :type :string}]
+                        :return-type :string}
               [:FunCall "Other"]
-              [:FunCall "Main" "Arg1"]]
+              [:FunCall "Main" [:String "Arg1"]]]
              {"Other" {:args []
                        :return-type :string}})
 
 
-  (ast-to-ir [:FunDef "HelloWorld"
-              {:args [{:id "x" :type :string}]
+  (ast-to-ir [:FunDef
+              {:fn-name "HelloWorld"
+               :args [{:id "x" :type :string}]
                :return-type :string}
-              [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
-             { "java.lang.String/concat"
-              {:args [:string]
-               :return-type :string}})
+              [:InteropCall {:class-name "java.lang.String"
+                             :method-name "concat"}
+               [:String "Hello "]
+               [:VarRef
+                {:var-id "x"}]]]
+             {})
 
   (map-ast-to-ir (init-tenv)
-                  [[:FunDef "HelloWorld"
-                    {:args [{:id "x" :type :string}]
+                 [[:FunDef
+                    {:fn-name "HelloWorld"
+                     :args [{:id "x" :type :string}]
                      :return-type :string}
-                    [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
-                   [:FunDef "Main"
-                    {:args []
+                    [:InteropCall {:class-name "java.lang.String"
+                                   :method-name "concat"}
+                     [:String "Hello "]
+                     [:VarRef
+                      {:var-id "x"}]]]
+                  [:FunDef
+                   {:args []
+                    :fn-name "Main"
                      :return-type :void}
-                    [:FunCall "HelloWorld" "Johnny"]]]
-                  )
-  (ast-to-ir [:FunDef "f" {:args [], :return-type :int} [:AddInt 2 [:MulInt 2 4]]] {})
+                   [:FunCall "HelloWorld"
 
-  (build-program [[:FunDef "f" {:args [], :return-type :int} [:AddInt 2 2]]
+                    [:String "Johnny"]]]])
+
+  (ast-to-ir [:FunDef {:args [], :fn-name "f" :return-type :int}
+              [:AddInt [:Int 2] [:MulInt
+                                 [:Int 2]
+                                 [:Int 4]]]] {})
+
+  (build-program [[:FunDef {:args [], :return-type :int :fn-name "f"}
+                   [:AddInt [:Int 2] [:Int  2]]]
                   [:FunCall "f"]])
 
   (build-program
-   [[:FunDef "HelloWorld"
-     {:args [{:id "x" :type :string}]
+   [[:FunDef
+     {:fn-name "HelloWorld"
+      :args [{:id "x" :type :string}]
       :return-type :string}
-     [:InteropCall "java.lang.String/concat" [:VarRef "x"]]]
-    [:FunDef "Main"
+     [:InteropCall {:class-name "java.lang.String"
+                    :method-name "concat"}
+      [:String "Hello "]
+      [:VarRef
+       {:var-id "x"}]]]
+    [:FunDef
      {:args []
+      :fn-name "Main"
       :return-type :void}
-     [:FunCall "HelloWorld" "Johnny"]]
-    [:FunCall "Main"]]))
+     [:FunCall "HelloWorld" [:String "Johnny"]]]
+    [:FunCall "Main"]])
+
+
+  )
 
 
 
@@ -356,20 +391,25 @@
   (require '[lasm.emit :as emit])
 
 
+  ;; make-fn from AST via build-programs
   (-> (build-program
-       [[:FunDef "Hello"
-         {:args [{:id "x" :type :string}]
+       [[:FunDef
+         {:fn-name "Hello"
+          :args [{:id "x" :type :string}]
           :return-type :string}
-         [:InteropCall "java.lang.String/concat" "Hello " [:VarRef "x"]]]
-        [:FunDef "Main112"
-         {:args []
+         [:InteropCall {:class-name "java.lang.String"
+                        :method-name "concat"}
+          [:String "Hello "]
+          [:VarRef {:var-id "x"}]]]
+        [:FunDef
+         {:fn-name "Main112"
+          :args []
           :return-type :string}
-         [:FunCall "Hello" "Johnny"]]]
-       "Main112")
+         [:FunCall "Hello" [:String "Johnny"]]]])
       emit/emit-and-run!)
 
 
-
+  ;; make-fn from IR
 
   (emit/make-fn   {:class-name "TestConcat"
                    :args [:string],
