@@ -10,7 +10,8 @@
 
 (defn errorf [msg & args]
   (throw (ex-info (apply format msg args)
-                  {:msg msg})))
+                  {:msg msg
+                   :args args})))
 
 
 (defmulti ast-to-ir (fn [expr _] (first expr)))
@@ -130,6 +131,46 @@
     :FunCall (if-let [{:keys [return-type]} (tenv (first exprs))]
                return-type)))
 
+(defn can-conform-types? [param-class arg-expr tenv]
+  (assert (symbol? param-class)
+          "Param-class needs to be a symbol")
+  (let [arg-type (ast-expr-to-ir-type arg-expr tenv)]
+    (cond
+      (= param-class arg-type)
+      true
+      (and (vector? arg-type) (= :class (first arg-type)))
+      (let [[_ class-name] arg-type
+            java-class (Class/forName class-name)]
+        (or (= class-name (name param-class))
+            (contains?
+             (:bases (reflect/reflect java-class))
+             param-class)))
+      (= (name param-class) (name arg-type))
+      true)))
+
+
+
+(comment
+  ;; TODO START HERE
+  ;; this works
+  (can-conform-types?   (symbol "java.lang.CharSequence") [:String "aa"] {})
+
+  ;; this doesn
+  (can-conform-types? (symbol  "java.lang.CharSequence") [:FunCall "Main"] { "Main" {:args [:string]
+                                                                                    :return-type :string}})
+
+  ;; but this would, if that's how we store types in tevn
+  (can-conform-types? (symbol  "java.lang.CharSequence") [:FunCall "Main"]
+                      { "Main" {:args [:class "java.lang.String"]
+                                :return-type [:class "java.lang.String"]}})
+
+  (reflect/reflect
+   (class "java.lang.String"))
+
+  (reflect/reflect String :ancestors true)
+
+  (reflect/reflect String))
+
 
 (defn lookup-interop-method-signature [class-name method-name call-arg-exprs static? tenv]
   ;; because of the way we put 'this' as first argument
@@ -137,47 +178,63 @@
   ;; their corresponding java signature, so we need to (dec (count call-arg-expr))
   (let [call-arg-count (if static?
                          (count call-arg-exprs)
-                         (dec (count call-arg-exprs)))]
-    (->> (reflect/reflect (Class/forName class-name))
-         :members
-         (filter (comp #{(symbol method-name)} :name))
-         (map (fn [{:keys [return-type parameter-types name]}]
-                {:return-type (jvm-type-to-ir return-type)
-                 :args (mapv jvm-type-to-ir parameter-types)
-                 :name (clojure.core/name name)}))
-         ;;TODO also use args-maybe? to filter results on matching arity and parameter types!
-        (filter (fn [{:keys [args]}]
-                   (and (=
-                         (count args)
-                         call-arg-count)
-                        (every? true?
-                                (map (fn [param arg-e]
-                                       (= param
-                                          (ast-expr-to-ir-type arg-e tenv)))
-                                     args
-                                     call-arg-exprs)))))
-         first)))
+                         (dec (count call-arg-exprs)))
+        matching-methods
+        (->> (reflect/reflect (Class/forName class-name))
+             :members
+             (filter (comp #{(symbol method-name)} :name))
+             ;;TODO also use args-maybe? to filter results on matching arity and parameter types!
+             (filter (fn [{:keys [parameter-types]}]
+                       (and (=
+                             (count parameter-types)
+                             call-arg-count)
+                            (every? true?
+                                    (map (fn [param arg-e]
+                                           (can-conform-types? param arg-e tenv))
+                                         parameter-types
+                                         call-arg-exprs)))))
+             (map (fn [{:keys [return-type parameter-types name]}]
+                    {:return-type (jvm-type-to-ir return-type)
+                     :args (mapv jvm-type-to-ir parameter-types)
+                     :name (clojure.core/name name)}))
+             ;; TODO check how many matches we found and throw an error if there is ambiguity
+             )]
+    (when (not= (count matching-methods) 1)
+      (throw (ex-info "Ambiguous Interop Method signature, found more then 1 match or no matches at all"
+                      {:class-name class-name
+                       :method-name method-name
+                       :call-arg-exprs call-arg-exprs
+                       :static? static?
+                       :matching-methods matching-methods})))
+    (first matching-methods)))
 
 (comment
   ;; TODO needs a lot of work this
 
   (lookup-interop-method-signature "java.lang.Math"  "abs"
                                    [[:FunCall "f"  [:IntExpr 2]]]
+                                   true
                                    {"f" {:args [:int]
                                          :return-type :int}})
 
   (lookup-interop-method-signature "java.lang.String" "concat"
                                    (list [:String " Hello" ] [:VarRef {:var-id "x"}])
                                    false
-                                   {"x" :string })
+                                   {"x" [:class "java.lang.String"]})
 
 
   (lookup-interop-method-signature "java.lang.String" "replace"
-                                   (list [:FunCall "Main"][:String " Hello" ] [:VarRef {:var-id "x"}])
+                                   (list [:FunCall "Main"]
+                                         [:String " Hello" ]
+                                         [:VarRef {:var-id "x"}])
                                    false
                                    {"x" :string
-                                    "Main" {:args [:string]
-                                            :return-type :string}})
+                                    "Main" {:args [[:class "java.lang.String"]]
+                                            :return-type [:class "java.lang.String"]}})
+
+  (->> (reflect/reflect String)
+       :members
+       (filter (fn [{:keys [name]}] (= name 'replace))))
 
   ;; TODO How about that?
   {:return-type [:class "java.lang.String"],
@@ -187,7 +244,7 @@
 
 
 (defmethod ast-to-ir :InteropCall [[_ {:keys [class-name method-name static?]} & method-args] tenv]
-;;  (println ":InteropCall=" [class-name method-name static?] " method-args = " method-args " tenv= " tenv)
+  #_(println ":InteropCall=" [class-name method-name static?] " method-args = " method-args " tenv= " tenv)
   (let [{:keys [args return-type] :as env-type}  (tenv method-name)
         ;; TODO should interop take a map with params instead positional?
         jvm-type (lookup-interop-method-signature class-name method-name method-args static? tenv)
@@ -238,10 +295,8 @@
 
 
 (defn init-tenv []
-  {"java.lang.String/concat" {:args [:string]
-                              :return-type :string}
-   "printstr"  {:args [:string]
-               :return-type :string
+  {"printstr"  {:args [[:class "java.lang.String"]]
+                :return-type [:class "java.lang.String"]
                :special-form :print-str}
    "printint"  {:args [:int]
                 :return-type :int

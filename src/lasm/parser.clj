@@ -1,5 +1,6 @@
 (ns lasm.parser
-  (:require [instaparse.core :as insta]))
+  (:require [clojure.string :as string]
+            [instaparse.core :as insta]))
 
 
 (def parser
@@ -26,18 +27,23 @@ BinOp :=  '+' | '-' | '/' | '*'
 EqOp := '>' | '<' | '>=' | '<=' | '==' | '!='
 <TypeAnnotation> := ws <':'> ws TypeExpr
 FunDefExpr := <'fn'>ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=>'> ws body
-TypeExpr := 'string' | 'int'
+TypeExpr := 'string' | 'int' | 'void'
 params := VarExpr? (ws <','> ws VarExpr)*
 body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
 FunCallExpr :=  symbol <'('> comma-delimited-exprs? <')'>
-StaticInteropCallExpr :=  <'.'>symbol <'('> symbol ws comma ws  comma-delimited-exprs? <')'>
-InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-delimited-exprs? <')'>"))
+StaticInteropCallExpr :=  <'.'>symbol <'('> symbol ws (comma ws  comma-delimited-exprs)? <')'>
+InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws (comma ws  comma-delimited-exprs)? <')'>"))
 
 
-(defn trans-type [[_ type-expr]]
+(defn trans-type [[_ type-str]]
   ;; TODO for now this is good enough, but this needs to get smarter
   ;; once we want to support class names and java objects
-  (keyword type-expr))
+  (cond
+    (= type-str "string") [:class "java.lang.String"]
+    (string/includes? type-str ".") [:class type-str]
+    :else
+    (keyword type-str)))
+
 
 (defn trans-param [[_ arg-id type-expr]]
   {:id arg-id
@@ -129,6 +135,17 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
 
 
   (-> (parser "fn Fib(x:int): int =>
+       if x <= 2
+          1
+       else
+           Fib(x-1) + Fib(x-2)
+       printint(Fib(4))")
+      parse-tree-to-ast
+      ast/build-program
+      emitter/emit!)
+
+
+  (-> (parser "fn Fib(x:int): int =>
   if x <= 2
      1
   else
@@ -139,15 +156,15 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws comma ws  comma-d
   printstr(s)
   printstr(\"Result of Fib(15) is: \")
   printint(r)")
-      parse-tree-to-ast #_
-      ast/build-program #_
+      parse-tree-to-ast
+      ast/build-program
       emitter/emit-and-run!)
 
   (-> "fn f(x:int):int => 2*x + 2
 printint(.abs(java.lang.Math, 100 - f(2+8*100)))"
       ;; leaving top level call expr for later
       parser
-      parse-tree-to-ast
+      parse-tree-to-ast #_#_
       ast/build-program
       emitter/emit-and-run!)
 
@@ -159,7 +176,7 @@ printint(.abs(java.lang.Math, 100 - f(2+8*100)))"
   else
       x *fact(x-1)
   fact(4)")
-      parse-tree-to-ast #_#_
+      parse-tree-to-ast
       ast/build-program
       emitter/emit!)
 
@@ -168,16 +185,25 @@ printint(.abs(java.lang.Math, 100 - f(2+8*100)))"
   (fact/invoke 15)
 
   (->
-   (parser   "fn HelloWorld(x: string): string => { .concat(this java.lang.String,  \"Hello \", x) }
+   (parser
+"fn HelloWorld(x: string): string => { .concat(this java.lang.String,  \"Hello \", x) }
 fn Main():string => { HelloWorld(\"Johnny\") }
 printstr(.replace(this java.lang.String, Main(), \"H\", \"->\"))")
    ;; leaving top level call expr for later
    parse-tree-to-ast
    ast/build-program
-   ;; TODO this won't return since build-program creates entry-point with :return-type :void
-   ;; figuring out how to parameterize this for different return types and command args would be useful!
    emitter/emit-and-run!)
 
+
+
+
+  (require '[clojure.reflect :as reflect])
+
+  (->> (reflect/reflect java.io.PrintStream)
+       :members
+       (filter (fn [{:keys [name]}] (= name 'println))))
+
+  (Class/forName "java.io.PrintStream")
 
 
   (->
