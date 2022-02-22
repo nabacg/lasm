@@ -31,18 +31,19 @@
 
 
 
-#_(defn print-and-load-bytecode [writer class-name]
+
+(defn print-and-load-bytecode [writer class-name]
   (let [byteArray (.toByteArray ^ClassWriter writer)]
-    (lasm.decompile/to-bytecode byteArray class-name)
+    (lasm.decompiler/to-bytecode byteArray class-name)
     (.defineClass ^clojure.lang.DynamicClassLoader
                   (clojure.lang.DynamicClassLoader.)
                   (.replace ^String class-name \/ \.)
                   byteArray
                   nil)))
-#_
+
 (defn print-and-load-java [writer class-name]
   (let [byteArray (.toByteArray ^ClassWriter writer)]
-    (lasm.decompile/to-java byteArray class-name)
+    (lasm.decompiler/to-java byteArray class-name)
     (.defineClass ^clojure.lang.DynamicClassLoader
                   (clojure.lang.DynamicClassLoader.)
                   (.replace ^String class-name \/ \.)
