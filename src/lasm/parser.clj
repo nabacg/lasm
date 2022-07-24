@@ -125,13 +125,13 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws (comma ws  comma-
      1
   else
       fib(x-1) + fib(x-2)")
-      parse-tree-to-ast
-      ast/build-program
+      parse-tree-to-ast 
+      ast/build-program 
       emitter/emit!)
 
-  (fib/invoke 15)
+  (fib/invoke 16)
 
-  (map #(fib/invoke %) (range 10))
+  (map #(fib/invoke %) (range 20))
 
 
   (-> (parser "fn Fib(x:int): int =>
@@ -164,10 +164,20 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws (comma ws  comma-
 printint(.abs(java.lang.Math, 100 - f(2+8*100)))"
       ;; leaving top level call expr for later
       parser
-      parse-tree-to-ast #_#_
+      parse-tree-to-ast  #_#_
       ast/build-program
       emitter/emit-and-run!)
 
+  
+  (-> (parser "fn Fib(x:int): int =>
+       if x <= 2
+          1
+       else
+           Fib(x-1) + Fib(x-2)
+       println(Fib(4))")
+      parse-tree-to-ast #_
+      ast/build-program #_
+      emitter/emit!)
 
 
   (-> (parser "fn fact(x:int): int =>
@@ -217,7 +227,7 @@ fn NewMain(n: string):string => { HelloWorld(n) }"
    ;; figuring out how to parameterize this for different return types and command args would be useful!
    emitter/emit!)
 
-  (NewMain/invoke "Anne !")
+  (NewMain/invoke "Johnny !")
 
 
 

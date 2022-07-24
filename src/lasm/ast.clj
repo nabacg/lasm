@@ -237,6 +237,7 @@
    :name "replace"}
   )
 
+(declare map-ast-to-ir)
 
 (defmethod ast-to-ir :InteropCall [[_ {:keys [class-name method-name static?]} & method-args] tenv]
   #_(println ":InteropCall=" [class-name method-name static?] " method-args = " method-args " tenv= " tenv)

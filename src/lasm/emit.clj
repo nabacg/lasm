@@ -1,6 +1,7 @@
 (ns lasm.emit
   (:require [clojure.string :as string]
-            [clojure.pprint :as pprint])
+            [clojure.pprint :as pprint]
+            [lasm.decompiler :as decomp])
   (:import [org.objectweb.asm Opcodes Type ClassWriter]
            [org.objectweb.asm.commons Method GeneratorAdapter]))
 
@@ -209,11 +210,11 @@
                   (clojure.lang.DynamicClassLoader.)
                   (.replace ^String class-name \/ \.)
                   (.toByteArray ^ClassWriter writer) nil)
-   #_ (decomp/to-bytecode (.toByteArray ^ClassWriter  writer)
-                        "TestConcat")
+    (decomp/to-bytecode (.toByteArray ^ClassWriter  writer)
+                       class-name)
 
-  #_  (decomp/to-java (.toByteArray ^ClassWriter  writer)
-                        "TestConcat")
+    #_(decomp/to-java (.toByteArray ^ClassWriter  writer)
+                    class-name)
     class-name))
 
 
@@ -419,6 +420,4 @@
                    ]
             :class-name "DoMath"})
 
-  (DoMath/invoke 102)
-
-  )
+  (DoMath/invoke 102))
