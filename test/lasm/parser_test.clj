@@ -125,7 +125,7 @@ printint(java.lang.Math/abs(100 - f(2+8*100)))"
          [:AddInt [:Int 2] [:MulInt [:Int 8] [:Int 100]]]]]]]]
 
     ;; Non-static interop (instance method call) in multiple fns calls       
-    "fn HelloWorld(x: string): string => { x.concat(\"Hello \") }
+    "fn HelloWorld(x: string): string => { \"Hello \".concat(x) }
 fn Main():string => { HelloWorld(\"Johnny\") }
 printstr(Main().replace(\"H\", \"->\"))"
     [[:FunDef
@@ -133,8 +133,8 @@ printstr(Main().replace(\"H\", \"->\"))"
        :fn-name "HelloWorld",
        :return-type [:class "java.lang.String"]}
       [:InteropCall
-       {:this-expr [:VarRef {:var-id "x"}], :method-name "concat"}
-       [:String "Hello "]]]
+       {:this-expr [:String "Hello "] :method-name "concat"}
+       [:VarRef {:var-id "x"}]]]
      [:FunDef
       {:args [],
        :fn-name "Main",
