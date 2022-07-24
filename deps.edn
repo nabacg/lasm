@@ -1,6 +1,14 @@
 {:paths ["src"]
- :deps {org.clojure/clojure {:mvn/version "1.11"}
+ :deps {#_#_org.clojure/clojure {:mvn/version "1.11"}
         org.ow2.asm/asm {:mvn/version "8.0.1"}
         org.ow2.asm/asm-commons {:mvn/version "8.0.1"}
         com.clojure-goes-fast/clj-java-decompiler {:mvn/version "0.3.0"}
-        instaparse/instaparse {:mvn/version "1.4.10"}}}
+        instaparse/instaparse {:mvn/version "1.4.10"}}
+ :aliases
+ {
+  :tests
+  {:extra-paths ["test"]
+   :extra-deps  {com.cognitect/test-runner
+                 {:git/url "https://github.com/cognitect-labs/test-runner.git"
+                  :sha     "f7ef16dc3b8332b0d77bc0274578ad5270fbfedd"}}
+   :main-opts   ["-m" "cognitect.test-runner"]}}}

@@ -27,8 +27,8 @@
       :int Type/INT_TYPE
       :long Type/LONG_TYPE
       :bool Type/BOOLEAN_TYPE
-      nil (throw (ex-info "[resolve-type] NIL expr-type!"))
-      (throw (ex-info "Unknown expr-type, resolve-type failed" expr-type)))))
+      nil (throw (ex-info "[resolve-type] NIL expr-type!" {:expr-type nil}))
+      (throw (ex-info "Unknown expr-type, resolve-type failed" {:expr-type expr-type})))))
 
 (defn resolve-cmp-type [op]
   (case op

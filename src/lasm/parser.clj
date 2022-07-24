@@ -7,13 +7,14 @@
   (insta/parser
 "
 Prog := TopLevelExpr (ws expr-delim+ ws TopLevelExpr)*
-<TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr
-<Expr> := TopLevelExpr | InteropCallExpr | StaticInteropCallExpr | StringExpr | NumExpr | VarExpr | BinOpExpr | EqOpExpr | IfExpr
+<TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr
+<Expr> := TopLevelExpr | StringExpr | NumExpr | VarExpr | BinOpExpr | EqOpExpr | IfExpr
 <expr-delim> := <';'> | newline
 <newline> := <'\n'>
 <ws> := <' '>*
 <wc> := (ws | newline)*
-<symbol> :=  #'[a-zA-Z][\\.a-zA-Z0-9]*'
+<symbol> := #'[a-zA-Z][a-zA-Z0-9]*'
+<fullyQualifiedType> := #'[a-zA-Z][\\.a-zA-Z0-9]*'
 <comma> := <','>
 <comma-delimited-exprs> := Expr (ws comma ws Expr)*
 VarExpr := symbol[TypeAnnotation]
@@ -30,9 +31,9 @@ FunDefExpr := <'fn'>ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=>
 TypeExpr := 'string' | 'int' | 'void'
 params := VarExpr? (ws <','> ws VarExpr)*
 body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
-FunCallExpr :=  symbol <'('> comma-delimited-exprs? <')'>
-StaticInteropCallExpr :=  <'.'>symbol <'('> symbol ws (comma ws  comma-delimited-exprs)? <')'>
-InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws (comma ws  comma-delimited-exprs)? <')'>"))
+FunCallExpr := symbol <'('> comma-delimited-exprs? <')'>
+StaticInteropCallExpr := fullyQualifiedType<'/'>symbol <'('> comma-delimited-exprs? <')'>
+InteropCallExpr := Expr<'.'>symbol <'('> comma-delimited-exprs? <')'>"))
 
 
 (defn trans-type [[_ type-str]]
@@ -97,17 +98,19 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws (comma ws  comma-
    (mapv trans-to-ast arg-exprs)))
 
 
-(defmethod trans-to-ast :InteropCallExpr [[_ method-name class-name & args]]
+(defmethod trans-to-ast :InteropCallExpr [[_ this-expr method-name  & args]]
   (into
-   [:InteropCall {:class-name  class-name
+   [:InteropCall {:this-expr (trans-to-ast  this-expr)
                   :method-name method-name}]
    (mapv trans-to-ast args)))
 
-(defmethod trans-to-ast :StaticInteropCallExpr [[_ method-name class-name & args]]
+;;(trans-to-ast (first (rest (parser "x.toString(b)"))))
+
+(defmethod trans-to-ast :StaticInteropCallExpr [[_  class-name method-name & args]]
   (into
-   [:InteropCall {:class-name  class-name
-                  :method-name method-name
-                  :static? true}]
+   [:StaticInteropCall
+    {:class-name  class-name
+     :method-name method-name}]
    (mapv trans-to-ast args)))
 
 (defn parse-tree-to-ast [[_ & exprs]]
@@ -140,7 +143,7 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws (comma ws  comma-
        else
            Fib(x-1) + Fib(x-2)
        printint(Fib(4))")
-      parse-tree-to-ast
+      parse-tree-to-ast  #_#_
       ast/build-program
       emitter/emit!)
 
@@ -160,12 +163,13 @@ InteropCallExpr :=  <'.'>symbol <'('> ws <'this'> ws symbol ws (comma ws  comma-
       ast/build-program
       emitter/emit-and-run!)
 
+
   (-> "fn f(x:int):int => 2*x + 2
-printint(.abs(java.lang.Math, 100 - f(2+8*100)))"
+printint(java.lang.Math/abs(100 - f(2+8*100)))"
       ;; leaving top level call expr for later
-      parser
-      parse-tree-to-ast  #_#_
-      ast/build-program
+      parser 
+      parse-tree-to-ast 
+      ast/build-program 
       emitter/emit-and-run!)
 
   
@@ -175,7 +179,7 @@ printint(.abs(java.lang.Math, 100 - f(2+8*100)))"
        else
            Fib(x-1) + Fib(x-2)
        println(Fib(4))")
-      parse-tree-to-ast #_
+      parse-tree-to-ast 
       ast/build-program #_
       emitter/emit!)
 
@@ -186,8 +190,8 @@ printint(.abs(java.lang.Math, 100 - f(2+8*100)))"
   else
       x *fact(x-1)
   fact(4)")
-      parse-tree-to-ast
-      ast/build-program
+      parse-tree-to-ast #_
+      ast/build-program #_
       emitter/emit!)
 
 
@@ -196,9 +200,9 @@ printint(.abs(java.lang.Math, 100 - f(2+8*100)))"
 
   (->
    (parser
-"fn HelloWorld(x: string): string => { .concat(this java.lang.String,  \"Hello \", x) }
+    "fn HelloWorld(x: string): string => { x.concat(\"Hello \", x) }
 fn Main():string => { HelloWorld(\"Johnny\") }
-printstr(.replace(this java.lang.String, Main(), \"H\", \"->\"))")
+printstr(Main().replace(\"H\", \"->\"))")
    ;; leaving top level call expr for later
    parse-tree-to-ast
    ast/build-program

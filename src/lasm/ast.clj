@@ -239,13 +239,29 @@
 
 (declare map-ast-to-ir)
 
-(defmethod ast-to-ir :InteropCall [[_ {:keys [class-name method-name static?]} & method-args] tenv]
+(defmethod ast-to-ir :StaticInteropCall [[_ {:keys [class-name method-name static?]} & method-args] tenv]  
+  (let [{:keys [args return-type] :as env-type}  (tenv method-name)
+        ;; TODO should interop take a map with params instead positional?        
+        jvm-type (lookup-interop-method-signature class-name method-name method-args true tenv)
+        [_ args-ir]      (map-ast-to-ir tenv method-args)
+        ir-op    :static-interop-call
+        {:keys [return-type args]}  (merge-with #(or %1 %2)   jvm-type env-type )]    
+    (if  (or env-type jvm-type)
+      [tenv
+       (conj (vec args-ir) ;; in case args-ir is empty, thus '()
+             [ir-op [(keyword (str class-name "/" method-name)) args return-type]])]
+      (errorf "Unknown method signature for class/method: %s/%s" class-name method-name))))
+
+(defmethod ast-to-ir :InteropCall [[_ {:keys [this-expr method-name static?]} & method-args] tenv]
   #_(println ":InteropCall=" [class-name method-name static?] " method-args = " method-args " tenv= " tenv)
   (let [{:keys [args return-type] :as env-type}  (tenv method-name)
         ;; TODO should interop take a map with params instead positional?
+        a-type  (type-checker/synth {:expr  this-expr :env  tenv})
+        _ (println "a-type= " a-type)
+        [_ class-name] a-type
         jvm-type (lookup-interop-method-signature class-name method-name method-args static? tenv)
         [_ args-ir]      (map-ast-to-ir tenv method-args)
-        ir-op   (if static? :static-interop-call :interop-call)
+        ir-op :interop-call
         {:keys [return-type args]}  (merge-with #(or %1 %2)   jvm-type env-type )]
 
    #_ (println "env-type= " env-type " jvm-type= " jvm-type)
@@ -255,6 +271,44 @@
        (conj (vec args-ir) ;; in case args-ir is empty, thus '()
              [ir-op [(keyword (str class-name "/" method-name)) args return-type]])]
       (errorf "Unknown method signature for class/method: %s/%s" class-name method-name))))
+
+
+(comment
+
+  (build-program
+   [[:FunDef
+     {:args [{:id "x", :type :int}], :fn-name "f", :return-type :int}
+     [:MulInt [:Int 2] [:AddInt [:VarRef {:var-id "x"}] [:Int 2]]]]
+    [:FunCall
+     [:VarRef {:var-id "printint"}]
+     [:InteropCall
+      {:class-name "java.lang.Math", :method-name "abs", :static? true}
+      [:SubInt
+       [:Int 100]
+       [:FunCall
+        [:VarRef {:var-id "f"}]
+        [:AddInt [:Int 2] [:MulInt [:Int 8] [:Int 100]]]]]]]])
+
+
+  (ast-to-ir [:VarRef {:var-id "printint"}]
+             (init-tenv))
+
+
+  (type-checker/synth {:expr [:VarRef {:var-id "f"}]
+                       :env (assoc  (init-tenv)
+                                    "f" {:args [:int], :return-type :int})})
+
+  (ast-to-ir [:FunCall
+                                     "f"
+                                     [:AddInt [:Int 2] [:MulInt [:Int 8] [:Int 100]]]]
+             (assoc  (init-tenv)
+                     "f" {:args [:int], :return-type :int}))
+
+  (ast-to-ir [:FunDef
+              {:args [{:id "x", :type :int}], :fn-name "f", :return-type :int}
+              [:MulInt [:Int 2] [:AddInt [:VarRef {:var-id "x"}] [:Int 2]]]]
+             (init-tenv))
+  )
 
 
 (defmethod ast-to-ir :FunCall [[_ fn-name & fn-args] tenv]
@@ -377,7 +431,7 @@
      :return-type :int}
     [:If [:>  [:VarRef {:var-id "x"}] [:Int{:value 119}]]
      [:Int {:value  42}]
-     [:Int {:value -1}]]]
+     [:Int {:value -1}]]]   
    {})
 
   (require '[lasm.emit :as emit])
