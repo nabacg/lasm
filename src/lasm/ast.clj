@@ -117,6 +117,7 @@
     :Int    :int
     ;; this solves fuzzy-type-equals actually, but only for strings
     :String [:class "java.lang.String"]
+    :string [:class "java.lang.String"]
     :AddInt :int
     :SubInt :int
     :MulInt :int
@@ -164,16 +165,20 @@
 
   (reflect/reflect String :ancestors true)
 
-  (reflect/reflect String))
+  (reflect/reflect String)
+
+  (->> 
+   (reflect/reflect (Class/forName "java.lang.String"))
+   :members
+   (filter (comp #{(symbol "concat")} :name)))
+  )
 
 
 (defn lookup-interop-method-signature [class-name method-name call-arg-exprs static? tenv]
   ;; because of the way we put 'this' as first argument
   ;; our call-args for non static will always have 1 more arg than
   ;; their corresponding java signature, so we need to (dec (count call-arg-expr))
-  (let [call-arg-count (if static?
-                         (count call-arg-exprs)
-                         (dec (count call-arg-exprs)))
+  (let [call-arg-count (count call-arg-exprs)
         matching-methods
         (->> (reflect/reflect (Class/forName class-name))
              :members
@@ -258,9 +263,9 @@
         ;; TODO should interop take a map with params instead positional?
         a-type  (type-checker/synth {:expr  this-expr :env  tenv})
         _ (println "a-type= " a-type)
-        [_ class-name] a-type
+        [_ class-name] (if (vector? a-type) a-type (ast-expr-to-ir-type [a-type] tenv))
         jvm-type (lookup-interop-method-signature class-name method-name method-args static? tenv)
-        [_ args-ir]      (map-ast-to-ir tenv method-args)
+        [_ args-ir]      (map-ast-to-ir tenv (cons this-expr method-args))
         ir-op :interop-call
         {:keys [return-type args]}  (merge-with #(or %1 %2)   jvm-type env-type )]
 

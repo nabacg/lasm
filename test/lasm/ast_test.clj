@@ -49,16 +49,15 @@
           :return-type [:class "java.lang.String"]}
          [:InteropCall
           {:this-expr [:VarRef {:var-id "x"}], :method-name "concat"}
-          [:String "Hello "]
-          [:VarRef {:var-id "x"}]]]
+          [:String "Hello "]]]
         [{:class-name "HelloWorld",          
           :args [[:class "java.lang.String"]],
           :return-type [:class "java.lang.String"],
           :body
           [[:arg {:value 0}]
-           [:def-local {:var-id "x", :var-type [:class "java.lang.String"]}]
-           [:string {:value "Hello "}]
+           [:def-local {:var-id "x", :var-type [:class "java.lang.String"]}]           
            [:ref-local {:var-id "x", :var-type [:class "java.lang.String"]}]
+           [:string {:value "Hello "}]
            [:interop-call
             [:java.lang.String/concat
              [[:class "java.lang.String"]]

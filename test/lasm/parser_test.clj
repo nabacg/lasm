@@ -124,8 +124,8 @@ printint(java.lang.Math/abs(100 - f(2+8*100)))"
          "f"
          [:AddInt [:Int 2] [:MulInt [:Int 8] [:Int 100]]]]]]]]
 
-    ;; Non-static interop (instance method call) in multiple fns calls    
-    "fn HelloWorld(x: string): string => { x.concat(\"Hello \", x) }
+    ;; Non-static interop (instance method call) in multiple fns calls       
+    "fn HelloWorld(x: string): string => { x.concat(\"Hello \") }
 fn Main():string => { HelloWorld(\"Johnny\") }
 printstr(Main().replace(\"H\", \"->\"))"
     [[:FunDef
@@ -134,13 +134,34 @@ printstr(Main().replace(\"H\", \"->\"))"
        :return-type [:class "java.lang.String"]}
       [:InteropCall
        {:this-expr [:VarRef {:var-id "x"}], :method-name "concat"}
-       [:String "Hello "]
-       [:VarRef {:var-id "x"}]]]
+       [:String "Hello "]]]
      [:FunDef
       {:args [],
        :fn-name "Main",
        :return-type [:class "java.lang.String"]}
       [:FunCall "HelloWorld" [:String "Johnny"]]]
+     [:FunCall
+      "printstr"
+      [:InteropCall
+       {:this-expr [:FunCall "Main"], :method-name "replace"}
+       [:String "H"]
+       [:String "->"]]]]
+
+    "fn Welcome(x: string): string => { x.concat(\" Welcome \") }
+fn Main():string => {Welcome(\"Johnny\") }
+printstr(Main().replace(\"H\", \"->\"))"
+    [[:FunDef
+      {:args [{:id "x", :type [:class "java.lang.String"]}],
+       :fn-name "Welcome",
+       :return-type [:class "java.lang.String"]}
+      [:InteropCall
+       {:this-expr [:VarRef {:var-id "x"}], :method-name "concat"}
+       [:String " Welcome "]]]
+     [:FunDef
+      {:args [],
+       :fn-name "Main",
+       :return-type [:class "java.lang.String"]}
+      [:FunCall "Welcome" [:String "Johnny"]]]
      [:FunCall
       "printstr"
       [:InteropCall

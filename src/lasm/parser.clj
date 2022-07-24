@@ -200,15 +200,26 @@ printint(java.lang.Math/abs(100 - f(2+8*100)))"
 
   (->
    (parser
-    "fn HelloWorld(x: string): string => { x.concat(\"Hello \", x) }
-fn Main():string => { HelloWorld(\"Johnny\") }
-printstr(Main().replace(\"H\", \"->\"))")
+    "fn Welcome(x: string): string => { x.concat(\", welcome! \") }
+fn Main():string => {Welcome(\"Johnny\") }
+s:string = Main()
+printstr(s.replace(\"H\", \"->\"))")
    ;; leaving top level call expr for later
-   parse-tree-to-ast
+   parse-tree-to-ast 
    ast/build-program
    emitter/emit-and-run!)
 
 
+;;; THIS Still doesn't work Main().replace(.. ) breaks it
+  (->
+   (parser
+    "fn Welcome(x: string): string => { x.concat(\", welcome! \") }
+fn Main():string => {Welcome(\"Johnny\") }
+printstr(Main().replace(\"H\", \"->\"))")
+   ;; leaving top level call expr for later
+   parse-tree-to-ast 
+   ast/build-program
+   emitter/emit-and-run!)
 
 
   (require '[clojure.reflect :as reflect])
@@ -221,12 +232,12 @@ printstr(Main().replace(\"H\", \"->\"))")
 
 
   (->
-   "fn HelloWorld(x: string): string => { .concat(this java.lang.String,  \"Hello \", x) }
+   "fn HelloWorld(x: string): string => {  \"Hello \".concat(x) }
 fn NewMain(n: string):string => { HelloWorld(n) }"
    ;; leaving top level call expr for later
    parser
-   parse-tree-to-ast
-   ast/build-program
+   parse-tree-to-ast 
+   ast/build-program 
    ;; TODO this won't return since build-program creates entry-point with :return-type :void
    ;; figuring out how to parameterize this for different return types and command args would be useful!
    emitter/emit!)
