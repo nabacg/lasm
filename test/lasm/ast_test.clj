@@ -1,6 +1,7 @@
 (ns lasm.ast-test
   (:require [clojure.test :as t]
-            [lasm.ast :as ast]))
+            [lasm.ast :as ast])
+  (:import [org.objectweb.asm Type]))
 
 
 ;; AST-expr
@@ -62,6 +63,17 @@
             [:java.lang.String/concat
              [[:class "java.lang.String"]]
              [:class "java.lang.String"]]]]}]
+        ;; TODO this fails because of referenctial equality vs value equality on ASM objects (Type, Method)
+        ;; we should probably remove those from AST and only add them in emit, looks like emit/resolve-type could be used for that 
+        ;; CtorInteropCall
+        ;; [:CtorInteropCall
+        ;;    {:class-name "javax.swing.JFrame"}
+        ;;    [:String "hello world swing"]]       
+        ;; [[:new {:owner (Type/getType (Class/forName  "javax.swing.JFrame"))}]          
+        ;;  [:string {:value "hello world swing"}]
+        ;;  [:invoke-constructor (Type/getType (Class/forName  "javax.swing.JFrame"))
+        ;;   :method  (ast/create-ctor-method {:arg-types [:string]})]]
+        
         ;; :FunCall
         [:FunCall
          "f"

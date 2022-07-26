@@ -73,6 +73,7 @@
 (defn synth [{:keys [expr env] :as ctx}]
   (case (first expr)
     :Int :int
+    :Bool :bool
     :String :string
     :If (synth { :expr (last expr) :env env})
     :> :boolean

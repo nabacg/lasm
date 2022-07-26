@@ -1,7 +1,9 @@
 (ns lasm.ast
   (:require [clojure.string :as string]
             [clojure.reflect :as reflect]
-            [lasm.type-checker :as type-checker]))
+            [lasm.type-checker :as type-checker])
+  (:import [org.objectweb.asm Type]
+           [org.objectweb.asm.commons Method]))
 
 
 (defn error [expr & [msg ]]
@@ -59,6 +61,9 @@
 (defmethod ast-to-ir :Int [[_  int-val] env]
   [env [[:int {:value int-val}]]])
 
+(defmethod ast-to-ir :Bool [[_ bool-val] env]
+  [env [[:bool {:value bool-val}]]])
+
 (defmethod ast-to-ir :VarRef [[_ {:keys [var-id var-type]}] env]
   (let [declared-type var-type
         var-type (env var-id)]
@@ -111,9 +116,10 @@
       [:class type-name]
       (keyword type-name))))
 
-(defn ast-expr-to-ir-type [[expr-type & exprs] tenv]
+(defn ast-expr-to-ir-type [[expr-type & exprs :as expr] tenv]
   (case expr-type
-      ;; TODO this clearly needs loads of work
+    ;; TODO this clearly needs loads of work
+    :Bool   :bool
     :Int    :int
     ;; this solves fuzzy-type-equals actually, but only for strings
     :String [:class "java.lang.String"]
@@ -125,25 +131,37 @@
     :VarRef  (if-let [var-type (tenv (:var-id (first exprs)))]
                var-type)
     :FunCall (if-let [{:keys [return-type]} (tenv (first exprs))]
-               return-type)))
+               return-type)
+    :class expr))
+
+(defn get-class-ancestors [klass]
+  ;; keeps calling `klass`'s getSuperclass until we get all the way to java.lang.Object
+  ;; needed because it turns out just passing `true` to (reflect/reflect klass :ancestors `true`)
+  ;; doesn't really do anything, one needs to pass a list of ancestor classes
+  (take-while #(not= % Object) (iterate #(.getSuperclass %) klass)))
+
 
 (defn can-conform-types? [param-class arg-expr tenv]
   (assert (symbol? param-class)
           "Param-class needs to be a symbol")
-  (let [arg-type (ast-expr-to-ir-type arg-expr tenv)]
-    (cond
-      (= param-class arg-type)
-      true
-      (and (vector? arg-type) (= :class (first arg-type)))
-      (let [[_ class-name] arg-type
-            java-class (Class/forName class-name)]
-        (or (= class-name (name param-class))
-            (contains?
-             (:bases (reflect/reflect java-class))
-             param-class)))
-      (= (name param-class) (name arg-type))
-      true)))
-
+  (println "arg-expr=" arg-expr " param-class=" param-class)
+  (if (keyword? arg-expr)
+    (case arg-expr
+          :bool (= param-class 'boolean)
+          false)
+    (let [arg-type (ast-expr-to-ir-type arg-expr tenv)]
+      (cond
+        (= param-class arg-type)
+        true
+        (and (vector? arg-type) (= :class (first arg-type)))
+        (let [[_ class-name] arg-type
+              java-class (Class/forName class-name)]
+          (or (= class-name (name param-class))
+              (contains?             
+               (into #{} (map #(.getName %)  (get-class-ancestors java-class)))
+               (name param-class))))
+        (= (name param-class) (name arg-type))
+        true))))
 
 
 (comment
@@ -174,39 +192,47 @@
   )
 
 
-(defn lookup-interop-method-signature [class-name method-name call-arg-exprs static? tenv]
-  ;; because of the way we put 'this' as first argument
-  ;; our call-args for non static will always have 1 more arg than
-  ;; their corresponding java signature, so we need to (dec (count call-arg-expr))
-  (let [call-arg-count (count call-arg-exprs)
-        matching-methods
-        (->> (reflect/reflect (Class/forName class-name))
-             :members
-             (filter (comp #{(symbol method-name)} :name))
-             ;;TODO also use args-maybe? to filter results on matching arity and parameter types!
-             (filter (fn [{:keys [parameter-types]}]
-                       (and (=
-                             (count parameter-types)
-                             call-arg-count)
-                            (every? true?
-                                    (map (fn [param arg-e]
-                                           (can-conform-types? param arg-e tenv))
-                                         parameter-types
-                                         call-arg-exprs)))))
-             (map (fn [{:keys [return-type parameter-types name]}]
-                    {:return-type (jvm-type-to-ir return-type)
-                     :args (mapv jvm-type-to-ir parameter-types)
-                     :name (clojure.core/name name)}))
-             ;; TODO check how many matches we found and throw an error if there is ambiguity
-             )]
-    (when (not= (count matching-methods) 1)
-      (throw (ex-info "Ambiguous Interop Method signature, found more then 1 match or no matches at all"
-                      {:class-name class-name
-                       :method-name method-name
-                       :call-arg-exprs call-arg-exprs
-                       :static? static?
-                       :matching-methods matching-methods})))
-    (first matching-methods)))
+(defn lookup-interop-method-signature
+  ([class-name method-name call-arg-exprs static? tenv]
+   (lookup-interop-method-signature class-name method-name call-arg-exprs static? tenv []))
+  ([class-name method-name call-arg-exprs static? tenv ancestors]
+   ;; because of the way we put 'this' as first argument
+   ;; our call-args for non static will always have 1 more arg than
+   ;; their corresponding java signature, so we need to (dec (count call-arg-expr))
+   (let [call-arg-count (count call-arg-exprs)
+         matching-methods
+         (->> (reflect/reflect (Class/forName class-name)  :ancestors ancestors)
+              :members
+              (filter (comp #{(symbol method-name)} :name))
+              ;;TODO also use args-maybe? to filter results on matching arity and parameter types!
+              (filter (fn [{:keys [parameter-types]}]
+                        (and (=
+                              (count parameter-types)
+                              call-arg-count)
+                             (every? true?
+                                     (map (fn [param arg-e]
+                                            (can-conform-types? param arg-e tenv))
+                                          parameter-types
+                                          call-arg-exprs)))))
+              (map (fn [{:keys [return-type parameter-types name]}]
+                     {:return-type (jvm-type-to-ir return-type)
+                      :args (mapv jvm-type-to-ir parameter-types)
+                      :name (clojure.core/name name)}))
+              distinct
+              ;; TODO check how many matches we found and throw an error if there is ambiguity
+              )
+         matching-methods (if (and (empty? matching-methods) (empty? ancestors))
+                            (lookup-interop-method-signature class-name method-name call-arg-exprs static? tenv
+                                                             (get-class-ancestors (Class/forName class-name)))
+                            matching-methods)]
+     (when (not= (count matching-methods) 1)
+       (throw (ex-info "Ambiguous Interop Method signature, found more then 1 match or no matches at all"
+                       {:class-name class-name
+                        :method-name method-name
+                        :call-arg-exprs call-arg-exprs
+                        :static? static?
+                        :matching-methods matching-methods})))
+     (first matching-methods))))
 
 (comment
   ;; TODO needs a lot of work this
@@ -246,7 +272,7 @@
 
 (defmethod ast-to-ir :StaticInteropCall [[_ {:keys [class-name method-name static?]} & method-args] tenv]  
   (let [{:keys [args return-type] :as env-type}  (tenv method-name)
-        ;; TODO should interop take a map with params instead positional?        
+        ;; TODO should interonp take a map with params instead positional?        
         jvm-type (lookup-interop-method-signature class-name method-name method-args true tenv)
         [_ args-ir]      (map-ast-to-ir tenv method-args)
         ir-op    :static-interop-call
@@ -262,9 +288,10 @@
   (let [{:keys [args return-type] :as env-type}  (tenv method-name)
         ;; TODO should interop take a map with params instead positional?
         a-type  (type-checker/synth {:expr  this-expr :env  tenv})
-        _ (println "a-type= " a-type)
         [_ class-name] (if (vector? a-type) a-type (ast-expr-to-ir-type [a-type] tenv))
-        jvm-type (lookup-interop-method-signature class-name method-name method-args static? tenv)
+                                        ; arg-types (mapv (fn [arg] (type-checker/synth {:expr arg :env tenv})) method-args)
+        arg-types (map #(ast-expr-to-ir-type % tenv) method-args)
+        jvm-type (lookup-interop-method-signature class-name method-name arg-types static? tenv)
         [_ args-ir]      (map-ast-to-ir tenv (cons this-expr method-args))
         ir-op :interop-call
         {:keys [return-type args]}  (merge-with #(or %1 %2)   jvm-type env-type )]
@@ -277,9 +304,93 @@
              [ir-op [(keyword (str class-name "/" method-name)) args return-type]])]
       (errorf "Unknown method signature for class/method: %s/%s" class-name method-name))))
 
+#_[[:CtorInteropCall
+    {:class-name "java.swing.JFrame"}
+    [:String "hello world swing"]]]
+
+
+#_(ast-to-ir [:CtorInteropCall
+              {:class-name "java.swing.JFrame"}
+              [:String "hello world swing"]] (init-tenv))
+
+(defn symbol->type [sym]
+  (case sym
+    void Type/VOID_TYPE
+    int Type/INT_TYPE
+    long Type/LONG_TYPE
+    boolean Type/BOOLEAN_TYPE
+    :string (Type/getType java.lang.String)
+    (cond (string/includes? (name sym) "<>")
+          (case (name sym)
+            "byte<>" (Type/getType "[B")
+            (Type/getType (format "[L%s;"  (string/replace
+                                            (string/replace  (name sym) "<>" "")
+                                            "." "/"))))
+          (and (symbol? sym) (= "Array" (namespace sym)))
+          (case (name sym)
+            "int" (Type/getType "[I")
+            "byte" (Type/getType "[B")
+            ;; TODO add other primitive types
+            (Type/getType (format "[L%s;" (string/replace (name sym) "." "/"))))
+          
+          
+          :else (Type/getType ^Class  (Class/forName (name sym))))))
+
+(defn to-type-array [syms]
+  (into-array Type (map symbol->type syms)))
+
+
+(defn create-ctor-method [{:keys [arg-types]}]
+  (Method. "<init>" Type/VOID_TYPE (to-type-array arg-types)))
+
+;(symbol->type (type-checker/synth {:expr [:String "a"] :env {}}))
+
+(defmethod ast-to-ir :CtorInteropCall [[_ {:keys [class-name]} & ctor-args] tenv]
+  (let [class-type (Type/getType (Class/forName class-name))
+        arg-types (map (fn [a] (type-checker/synth {:expr a :env tenv})) ctor-args)
+        method (create-ctor-method {:arg-types arg-types})
+        [_ args-ir] (map-ast-to-ir tenv ctor-args)]    
+    [tenv (conj (into [[:new {:owner class-type}]]
+                      args-ir) [:invoke-constructor {:owner class-type
+                                                     :method method}])]))
 
 (comment
+  (require '[lasm.emit :as emit] )
 
+  (emit/emit-and-run!
+   (build-program [[:CtorInteropCall
+                    {:class-name "javax.swing.JFrame"}
+                    [:String "hello world swing"]]
+                   [:CtorInteropCall
+                    {:class-name "javax.swing.JLabel"}
+                    [:String "hello world"]]]))
+
+  ;;SWING example
+  (emit/emit-and-run! 
+   (build-program [[:VarDef
+                    {:var-id "frame", :var-type [:class "javax.swing.JFrame"]}
+                    [:CtorInteropCall
+                     {:class-name "javax.swing.JFrame"}
+                     [:String "hello"]]]
+                   [:VarDef
+                    {:var-id "label", :var-type [:class "javax.swing.JLabel"]}
+                    [:CtorInteropCall
+                     {:class-name "javax.swing.JLabel"}
+                     [:String "Hello World"]]]
+                   [:VarDef
+                    {:var-id "container", :var-type [:class "java.awt.Container"]}
+                    [:InteropCall
+                     {:this-expr [:VarRef {:var-id "frame"}],
+                      :method-name "getContentPane"}]]
+                   [:InteropCall
+                    {:this-expr [:VarRef {:var-id "container"}], :method-name "add"}
+                    [:VarRef {:var-id "label"}]]
+                   [:InteropCall
+                    {:this-expr [:VarRef {:var-id "frame"}], :method-name "pack"}]
+                   [:InteropCall
+                    {:this-expr [:VarRef {:var-id "frame"}], :method-name "setVisible"}
+                    [:Bool true]]]))
+  
   (build-program
    [[:FunDef
      {:args [{:id "x", :type :int}], :fn-name "f", :return-type :int}
@@ -442,6 +553,7 @@
   (require '[lasm.emit :as emit])
 
   (emit/emit! {:fns [{:args [:int],
+                      
                  :return-type :int,
                  :body
                  [[:arg {:value 0}]

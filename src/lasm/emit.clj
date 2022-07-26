@@ -24,6 +24,7 @@
       :string (Type/getType String)
       :object (Type/getType Object)
       :void Type/VOID_TYPE
+      :boolean Type/BOOLEAN_TYPE
       :int Type/INT_TYPE
       :long Type/LONG_TYPE
       :bool Type/BOOLEAN_TYPE
@@ -112,11 +113,16 @@
     :invoke-constructor
     (.invokeConstructor ga (resolve-type (:owner cmd)) (:method cmd))
     :new
-    (.newInstance ga (:owner cmd))
+    (do
+      ;; ctor call that will happen immediately after will consume it's argument, leaving empty stack and leading to null pointer exception
+      (.newInstance ga (:owner cmd))
+      (.dup ga))
     :store-local
     (.storeLocal ga (:local-ref cmd) (resolve-type (:local-type cmd)))
     :load-local
     (.loadLocal ga  (:local-ref cmd) (resolve-type (:local-type cmd)))
+    :bool
+    (.push ga (boolean (:value cmd)))
     :int
     (.push ga (int (:value cmd)))
     :string

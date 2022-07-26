@@ -31,7 +31,18 @@
                                  "f"
                                  [:params [:VarExpr "x" [:TypeExpr "int"]]]
                                  [:TypeExpr "int"]
-                                 [:body [:BinOpExpr [:VarExpr "x"] [:BinOp "+"] [:NumExpr "1"]]]]]    
+                                 [:body [:BinOpExpr [:VarExpr "x"] [:BinOp "+"] [:NumExpr "1"]]]]]
+
+    "x:java.swing.JFrame = new java.swing.JFrame(\"hello world swing\")"
+    [:Prog          
+     [:VarDefExpr
+      [:VarExpr "x" [:TypeExpr "java.swing.JFrame"]]
+      [:CtorInteropExpr
+       "new"
+       "java.swing.JFrame"
+       [:StringExpr "hello world swing"]]]]
+    
+    
     "fn HelloWorld(x: string): string => { x.concat(\"Hello \", x) }
 fn Main():string => { HelloWorld(\"Johnny\") }
 printstr(Main().replace(\"H\", \"->\"))"
@@ -146,6 +157,11 @@ printstr(Main().replace(\"H\", \"->\"))"
        {:this-expr [:FunCall "Main"], :method-name "replace"}
        [:String "H"]
        [:String "->"]]]]
+
+    "new java.swing.JFrame(\"hello world swing\")"    
+    [[:CtorInteropCall
+      {:class-name "java.swing.JFrame"}
+      [:String "hello world swing"]]]
 
     "fn Welcome(x: string): string => { x.concat(\" Welcome \") }
 fn Main():string => {Welcome(\"Johnny\") }

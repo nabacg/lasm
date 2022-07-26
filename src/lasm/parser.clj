@@ -7,19 +7,20 @@
   (insta/parser
 "
 Prog := TopLevelExpr (ws expr-delim+ ws TopLevelExpr)*
-<TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr
-<Expr> := TopLevelExpr | StringExpr | NumExpr | VarExpr | BinOpExpr | EqOpExpr | IfExpr
+<TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr | CtorInteropExpr
+<Expr> := TopLevelExpr | BoolExpr | StringExpr | NumExpr | VarExpr | IfExpr | BinOpExpr | EqOpExpr 
 <expr-delim> := <';'> | newline
 <newline> := <'\n'>
 <ws> := <' '>*
 <wc> := (ws | newline)*
-<symbol> := #'[a-zA-Z][a-zA-Z0-9]*'
+<symbol> :=  #'^(?!true|false)[a-zA-Z][a-zA-Z0-9]*'
 <fullyQualifiedType> := #'[a-zA-Z][\\.a-zA-Z0-9]*'
 <comma> := <','>
 <comma-delimited-exprs> := Expr (ws comma ws Expr)*
 VarExpr := symbol[TypeAnnotation]
 StringExpr := <'\"'> #'[.[^\"]]*' <'\"'>
 NumExpr := #'[0-9]+'
+BoolExpr := 'true' | 'false'
 VarDefExpr := VarExpr ws <'='> ws Expr
 IfExpr := <'if'> ws EqOpExpr wc  Expr wc <'else'> wc Expr wc
 BinOpExpr  := Expr ws BinOp ws Expr
@@ -28,12 +29,13 @@ BinOp :=  '+' | '-' | '/' | '*'
 EqOp := '>' | '<' | '>=' | '<=' | '==' | '!='
 <TypeAnnotation> := ws <':'> ws TypeExpr
 FunDefExpr := <'fn'>ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=>'> ws body
-TypeExpr := 'string' | 'int' | 'void'
+TypeExpr := 'bool' | 'string' | 'int' | 'void' | fullyQualifiedType
 params := VarExpr? (ws <','> ws VarExpr)*
 body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
 FunCallExpr := symbol <'('> comma-delimited-exprs? <')'>
 StaticInteropCallExpr := fullyQualifiedType<'/'>symbol <'('> comma-delimited-exprs? <')'>
-InteropCallExpr := Expr<'.'>symbol <'('> comma-delimited-exprs? <')'>"))
+InteropCallExpr := Expr<'.'>symbol <'('> comma-delimited-exprs? <')'>
+CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>"))
 
 
 (defn trans-type [[_ type-str]]
@@ -57,6 +59,8 @@ InteropCallExpr := Expr<'.'>symbol <'('> comma-delimited-exprs? <')'>"))
 (defmethod trans-to-ast :StringExpr [[_ str-val]] [:String str-val])
 
 (defmethod trans-to-ast :NumExpr [[_ num-val]] [:Int (Integer/parseInt num-val)])
+
+(defmethod trans-to-ast :BoolExpr [[_ bool-val]] [:Bool  (= bool-val "true") ])
 
 (defmethod trans-to-ast :BinOp [[_ op]]
   (case op
@@ -97,6 +101,11 @@ InteropCallExpr := Expr<'.'>symbol <'('> comma-delimited-exprs? <')'>"))
    [:FunCall fn-name]
    (mapv trans-to-ast arg-exprs)))
 
+(defmethod trans-to-ast :CtorInteropExpr [[_ _ class-name & args]]
+  (into
+   [:CtorInteropCall
+    {:class-name class-name}]
+   (mapv trans-to-ast args)))
 
 (defmethod trans-to-ast :InteropCallExpr [[_ this-expr method-name  & args]]
   (into
@@ -244,7 +253,36 @@ fn NewMain(n: string):string => { HelloWorld(n) }"
 
   (NewMain/invoke "Johnny !")
 
+  (-> "fn MakeFrame(): int => {
+       frame:javax.swing.JFrame = new javax.swing.JFrame(\"hello\")
+       label:javax.swing.JLabel = new javax.swing.JLabel(\"Hello World\")
+       container:java.awt.Container = frame.getContentPane()
+       container.add(label)
+       frame.pack()
+       frame.setVisible(true)
+       42
+     }"
+      
+      parser 
+      parse-tree-to-ast 
+      ast/build-program 
+      emitter/emit!)
 
+
+  (javax.swing.SwingUtilities/invokeLater (fn [] (MakeFrame/invoke)))
+
+
+
+  (-> "frame:javax.swing.JFrame = new javax.swing.JFrame(\"BOOM!!!\")
+       label:javax.swing.JLabel = new javax.swing.JLabel(\"Hello World from lasm\")
+       container:java.awt.Container = frame.getContentPane()
+       container.add(label)
+       frame.pack()
+       frame.setVisible(true)"      
+      parser 
+      parse-tree-to-ast 
+      ast/build-program 
+      emitter/emit-and-run!)
 
 
 
