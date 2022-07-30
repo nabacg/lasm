@@ -443,7 +443,7 @@
          :else
          (conj args-ir
                [:call-fn [(keyword fn-name "invoke") args return-type]]))])
-    (errorf "Unknown function signature for fn-name: %s" fn-name fn-args)))
+    (errorf "Unknown function signature for fn-name: %s" fn-name fn-args tenv)))
 
 
 (defmethod ast-to-ir :FunDef [[_ {:keys [args return-type fn-name]} & body] tenv]
