@@ -34,7 +34,7 @@ params := VarExpr? (ws <','> ws VarExpr)*
 body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
 FunCallExpr := symbol <'('> comma-delimited-exprs? <')'>
 StaticInteropCallExpr := fullyQualifiedType<'/'>symbol <'('> comma-delimited-exprs? <')'>
-InteropCallExpr := Expr<'.'>symbol <'('> comma-delimited-exprs? <')'>
+InteropCallExpr := ( VarExpr | FunCallExpr )<'.'>symbol<'('> comma-delimited-exprs? <')'>
 CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>"))
 
 

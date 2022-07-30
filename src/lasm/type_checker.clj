@@ -228,6 +228,12 @@
               (throw (ex-info "Unknown Variable found" {:var-id (:var-id (second expr))
                                                         :expr expr
                                                         :env env})))
+    :VarDef (let [[_ {:keys [var-type]}] expr]
+              (if (not (nil? var-type))
+                var-type
+                (throw (ex-info "VarDef with unknown type, expected :var-type prop to be not empty"
+                                {:expr expr
+                                 :env env}))))
     :FunDef (let [[_ {:keys [args return-type]} & _] expr]
               [:fn (mapv :type args) return-type ])                                        
     (throw (ex-info "No Matching synth" {:expr expr :env env}))))
