@@ -5,20 +5,6 @@
             [lasm.emit :as emit]))
 
 
-;;this fails, as run expr returns nil for some reason
-#_(t/deftest sample-programs
-  (t/are [in out] (-> (p/parser in)
-                               p/parse-tree-to-ast 
-                               ast/build-program 
-                               emit/emit-and-run!)
-    "fn fact(x:int): int =>
-  if x <= 1
-     1
-  else
-      x *fact(x-1)
-  fact(4)"  10))
-
-
 (t/deftest sample-fibonacci
   (t/is 10 (-> (p/parser
                 "fn fact(x:int): int =>
@@ -28,7 +14,20 @@
       x *fact(x-1)
   fact(4)")
                p/parse-tree-to-ast 
-               ast/build-program 
+               ast/build-program
+               emit/emit-and-run!)))
+
+
+(t/deftest sample-fibonacci-with-type-check
+  (t/is 10 (-> (p/parser
+                "fn fact(x:int): int =>
+  if x <= 1
+     1
+  else
+      x *fact(x-1)
+  fact(4)")
+               p/parse-tree-to-ast 
+               ast/build-program-with-type-check
                emit/emit-and-run!)))
 
 
@@ -41,3 +40,19 @@ fn NewMain(n: string):string => { HelloWorld(n) }
                p/parse-tree-to-ast 
                ast/build-program 
                emit/emit-and-run!)))
+
+
+
+
+;;this fails, as run expr returns nil for some reason
+#_(t/deftest sample-programs
+    (t/are [in out] (-> (p/parser in)
+                        p/parse-tree-to-ast 
+                        ast/build-program 
+                        emit/emit-and-run!)
+      "fn fact(x:int): int =>
+  if x <= 1
+     1
+  else
+      x *fact(x-1)
+  fact(4)"  10))
