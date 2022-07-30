@@ -1,7 +1,5 @@
 (ns lasm.ast
-  (:require [clojure.reflect :as reflect]
-            [lasm.type-checker :as type-checker])
-  (:import [org.objectweb.asm Type]))
+  (:require [lasm.type-checker :as type-checker]))
 
 
 (defn error [expr & [msg ]]
@@ -140,18 +138,16 @@
       (errorf "Unknown method signature for class/method: %s/%s" class-name method-name))))
 
 (defmethod ast-to-ir :CtorInteropCall [[_ {:keys [class-name]} & ctor-args] tenv]
-  (let [class-type (Type/getType (Class/forName class-name))
-        arg-types (map (fn [a] (type-checker/synth {:expr a :env tenv})) ctor-args)
-        method (type-checker/create-ctor-method {:arg-types arg-types})
-        [_ args-ir] (map-ast-to-ir tenv ctor-args)]    
-    [tenv (conj (into [[:new {:owner class-type}]]
-                      args-ir) [:invoke-constructor {:owner class-type
-                                                     :method method}])]))
+  (let [[_ args-ir] (map-ast-to-ir tenv ctor-args)
+        {:keys [owner] :as ctor-props } (type-checker/make-asm-ctor tenv class-name ctor-args)]    
+    [tenv (conj (into [[:new {:owner owner}]]
+                      args-ir) [:invoke-constructor ctor-props])]))
 
 (defmethod ast-to-ir :FunCall [[_ fn-name & fn-args] tenv]
   (if-let [fn-type  (tenv fn-name)]
     (let [{:keys [args return-type special-form]} fn-type
           [_ args-ir] (map-ast-to-ir tenv fn-args)
+
           ]
       [tenv
        (cond

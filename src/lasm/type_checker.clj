@@ -127,8 +127,21 @@
   (into-array Type (map symbol->type syms)))
 
 
+(declare check synth augment augment-sub-expr)
+
+
 (defn create-ctor-method [{:keys [arg-types]}]
   (Method. "<init>" Type/VOID_TYPE (to-type-array arg-types)))
+
+(defn make-asm-type [class-name]
+  (Type/getType (Class/forName class-name)))
+
+(defn make-asm-ctor [tenv class-name ctor-args]
+  (let [class-type (make-asm-type class-name)
+        arg-types (map (fn [a] (synth {:expr a :env tenv})) ctor-args)
+        method (create-ctor-method {:arg-types arg-types})]
+    {:method method
+     :owner class-type}))
 
 (defn matches-type [expected-type {:keys [type expr env] :as ctx}]
   (if (= expected-type type)
@@ -138,7 +151,7 @@
                                   :expr expr
                                   :env env}))))
 
-(declare check synth augment augment-sub-expr)
+
 
 (defn augment-then-synth [ctx]
   (synth (assoc ctx :expr (augment (dissoc ctx :type)))))
