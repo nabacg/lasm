@@ -13,7 +13,10 @@
                    :args args})))
 
 
-(defmulti ast-to-ir (fn [expr _] (first expr)))
+(defmulti ast-to-ir (fn [expr _]
+                      (if (vector? expr) 
+                        (first expr)
+                        (errorf expr "invalid AST, probably failed parse"))))
 
 (defn args-to-locals [args]
   (vec

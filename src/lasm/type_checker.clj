@@ -107,6 +107,7 @@
     long Type/LONG_TYPE
     boolean Type/BOOLEAN_TYPE
     :string (Type/getType java.lang.String)
+    :int  Type/INT_TYPE
     (cond (string/includes? (name sym) "<>")
           (case (name sym)
             "byte<>" (Type/getType "[B")

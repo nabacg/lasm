@@ -32,11 +32,17 @@ FunDefExpr := <'fn'>ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=>
 TypeExpr := 'bool' | 'string' | 'int' | 'void' | fullyQualifiedType
 params := VarExpr? (ws <','> ws VarExpr)*
 body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
-FunCallExpr := symbol <'('> comma-delimited-exprs? <')'>
+FunCallExpr := symbol  <'('> comma-delimited-exprs? <')'>
 StaticInteropCallExpr := fullyQualifiedType<'/'>symbol <'('> comma-delimited-exprs? <')'>
-InteropCallExpr := ( VarExpr | FunCallExpr )<'.'>symbol<'('> comma-delimited-exprs? <')'>
+InteropCallExpr := ( StringExpr | VarExpr | FunCallExpr )<'.'>symbol<'('> comma-delimited-exprs? <')'>
 CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>"))
 
+
+
+(defn error [expr & msg-args]
+  (throw (ex-info   "Invalid input "
+                    {:expr expr
+                     :msg (apply format msg-args)})))
 
 (defn trans-type [[_ type-str]]
   ;; TODO for now this is good enough, but this needs to get smarter
@@ -52,7 +58,10 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
   {:id arg-id
    :type (trans-type type-expr)})
 
-(defmulti  trans-to-ast first)
+(defmulti  trans-to-ast (fn [expr]
+                          (if (insta/failure? expr)
+                            (error expr "invalid parse tree, probably failed parse")
+                            (first expr))))
 
 (defmethod trans-to-ast :TypeExpr [type-expr] (trans-type type-expr))
 
@@ -239,12 +248,11 @@ printstr(Main().replace(\"H\", \"->\"))")
 
   (Class/forName "java.io.PrintStream")
 
-
+  
   (->
-   "fn HelloWorld(x: string): string => {  \"Hello \".concat(x) }
-fn NewMain(n: string):string => { HelloWorld(n) }"
+   (parser  "fn HelloWorld(x: string): string => {  \"Hello \".concat(x) }
+fn NewMain(n: string):string => { HelloWorld(n) }")
    ;; leaving top level call expr for later
-   parser
    parse-tree-to-ast 
    ast/build-program 
    ;; TODO this won't return since build-program creates entry-point with :return-type :void
@@ -277,8 +285,12 @@ fn NewMain(n: string):string => { HelloWorld(n) }"
        label:javax.swing.JLabel = new javax.swing.JLabel(\"Hello World from lasm\")
        container:java.awt.Container = frame.getContentPane()
        container.add(label)
-       frame.pack()
-       frame.setVisible(true)"      
+       d:java.awt.Dimension = new java.awt.Dimension(400, 300)
+       frame.setPreferredSize(d)       
+       frame.pack()       
+       frame.setVisible(true)
+       frame.toFront()
+       frame.repaint()"      
       parser 
       parse-tree-to-ast 
       ast/build-program 
@@ -291,7 +303,6 @@ fn NewMain(n: string):string => { HelloWorld(n) }"
 f(1)")
       parse-tree-to-ast
       ast/build-program
-      emitter/emit-and-run!)
+      emitter/emit-and-run!))
 
-
-)
+;;4659 4228 5414 0508
