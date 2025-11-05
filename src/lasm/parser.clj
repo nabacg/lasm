@@ -44,11 +44,12 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
                     {:expr expr
                      :msg (apply format msg-args)})))
 
-#_(defn trans-type [[_ type-str]]
+(defn trans-type [[_ type-str]]
   ;; TODO for now this is good enough, but this needs to get smarter
   ;; once we want to support class names and java objects
   (cond
     (= type-str "string") [:class "java.lang.String"]
+    (= type-str "bool") :bool
     (string/includes? type-str ".") [:class type-str]
     :else
     (keyword type-str)))
@@ -56,14 +57,14 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
 
 (defn trans-param [[_ arg-id type-expr]]
   {:id arg-id
-   :type type-expr})
+   :type (trans-type type-expr)})
 
 (defmulti  trans-to-ast (fn [expr]
                           (if (insta/failure? expr)
                             (error expr "invalid parse tree, probably failed parse")
                             (first expr))))
 
-(defmethod trans-to-ast :TypeExpr [type-expr]  type-expr)
+(defmethod trans-to-ast :TypeExpr [type-expr]  (trans-type type-expr))
 
 (defmethod trans-to-ast :StringExpr [[_ str-val]] [:String str-val])
 
