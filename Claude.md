@@ -75,21 +75,21 @@ public class Proxy$1234 implements ActionListener {
 
 ---
 
-## 2. Parser Grammar Bug (CRITICAL)
+## 2. Parser Grammar Bug (FIXED ✅)
 
 ### 2.1 Problem Description
 
-**Location**: `src/lasm/parser.clj:34`
+**Location**: `src/lasm/parser.clj:34` (FIXED)
 
 ```ebnf
 body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
 ```
 
-The optional braces in the `body` rule cause the parser to incorrectly consume closing braces when parsing proxy expressions in longer function bodies.
+The optional braces in the `body` rule caused the parser to incorrectly consume closing braces when parsing proxy expressions in longer function bodies.
 
-### 2.2 Failure Conditions
+### 2.2 Failure Conditions (HISTORICAL - NOW FIXED)
 
-The parser fails when:
+The parser used to fail when:
 
 1. **Multi-Method Proxy + Additional Code**
    - First proxy has 3+ methods
@@ -152,18 +152,33 @@ The grammar defines:
 
 This appears to be a threshold where Instaparse's parser state becomes confused about brace depth. With 2 methods, the parser can backtrack successfully. With 3+ methods, the ambiguity compounds and causes parse failure.
 
-### 2.6 Impact
+### 2.6 Solution (IMPLEMENTED ✅)
 
-**Blocks**:
-- KeyListener implementation (requires 3 methods: keyPressed, keyReleased, keyTyped)
-- MouseListener implementation (requires 5 methods)
-- Any interface with 3+ methods
-- Complex event-driven programming
+**Fix Applied**: Added separate `proxy-body` grammar rule that requires braces
 
-**Current Workaround**:
-- Use only 1-2 method interfaces
-- Keep function bodies small
-- No reliable workaround for KeyListener
+**Changes Made** (`src/lasm/parser.clj`):
+```ebnf
+proxy-body := <'{'> wc Expr ws (expr-delim ws Expr)* wc <'}'>
+ProxyMethod := symbol ws <'('> ws params ws <')'> TypeAnnotation ws <'=>'> ws proxy-body
+```
+
+**Impact of Fix**:
+- ✅ KeyListener now works (3 methods)
+- ✅ MouseListener now works (5 methods)
+- ✅ Any interface with 3+ methods now supported
+- ✅ Multiple proxies in same function now work
+- ✅ Complex event-driven programming fully enabled
+
+**Breaking Change**: Proxy methods now **require** braces even for single expressions
+```lasm
+// OLD (no longer works)
+actionPerformed(e:ActionEvent): void => printstr("clicked")
+
+// NEW (required)
+actionPerformed(e:ActionEvent): void => { printstr("clicked") }
+```
+
+**Migration**: All existing proxy examples updated to use braces
 
 ---
 
