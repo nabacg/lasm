@@ -137,3 +137,23 @@
           parsed (p/parser code)]
       (is (not (insta/failure? parsed))
           "Should handle empty lines within code"))))
+
+(deftest test-type-transformation
+  (testing "Type expressions should be properly transformed"
+    (let [code "frame:javax.swing.JFrame = new javax.swing.JFrame(\"Test\")\nprintstr(\"ok\")"
+          parsed (p/parser code)]
+      (is (not (insta/failure? parsed))
+          "Should parse type annotations")
+      (when-not (insta/failure? parsed)
+        (let [ast-tree (p/parse-tree-to-ast parsed)
+              ;; Check that types are transformed to [:class "..."] format
+              var-def (first ast-tree)]
+          (is (= :VarDef (first var-def))
+              "First expression should be VarDef")
+          (let [var-type (get-in var-def [1 :var-type])]
+            (is (vector? var-type)
+                "Type should be a vector")
+            (is (= :class (first var-type))
+                "Type should start with :class, not :TypeExpr")
+            (is (= "javax.swing.JFrame" (second var-type))
+                "Type should be javax.swing.JFrame")))))))
