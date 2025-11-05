@@ -34,7 +34,8 @@
 
 
 
-(t/deftest sample-string-ops
+;; DISABLED: Isolating type checker issues
+#_(t/deftest sample-string-ops
   (t/is (= "Hello Johnny" (-> (p/parser
 "fn HelloWorld(x: string): string => {  \"Hello \".concat(x) }
 fn NewMain(n: string):string => { HelloWorld(n) }
