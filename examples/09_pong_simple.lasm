@@ -1,0 +1,215 @@
+fn createIntArray(size: int): java.lang.Object => {
+  intType:java.lang.Class = java.lang.Integer/TYPE
+  java.lang.reflect.Array/newInstance(intType, size)
+}
+
+fn getInt(arr: java.lang.Object, idx: int): int => {
+  java.lang.reflect.Array/getInt(arr, idx)
+}
+
+fn setInt(arr: java.lang.Object, idx: int, val: int): void => {
+  java.lang.reflect.Array/setInt(arr, idx, val)
+}
+
+fn max(a: int, b: int): int => {
+  if a > b { a } else { b }
+}
+
+fn min(a: int, b: int): int => {
+  if a < b { a } else { b }
+}
+
+fn main(): int => {
+  ballX:java.lang.Object = createIntArray(1)
+  ballY:java.lang.Object = createIntArray(1)
+  ballDX:java.lang.Object = createIntArray(1)
+  ballDY:java.lang.Object = createIntArray(1)
+  leftPaddleY:java.lang.Object = createIntArray(1)
+  rightPaddleY:java.lang.Object = createIntArray(1)
+  leftScore:java.lang.Object = createIntArray(1)
+  rightScore:java.lang.Object = createIntArray(1)
+
+  setInt(ballX, 0, 40)
+  setInt(ballY, 0, 15)
+  setInt(ballDX, 0, 1)
+  setInt(ballDY, 0, 1)
+  setInt(leftPaddleY, 0, 12)
+  setInt(rightPaddleY, 0, 12)
+  setInt(leftScore, 0, 0)
+  setInt(rightScore, 0, 0)
+
+  frame:javax.swing.JFrame = new javax.swing.JFrame("LASM PONG")
+  label:javax.swing.JLabel = new javax.swing.JLabel("Starting...")
+  black:java.awt.Color = new java.awt.Color(0, 0, 0)
+  white:java.awt.Color = new java.awt.Color(255, 255, 255)
+  label.setForeground(white)
+  label.setBackground(black)
+  label.setOpaque(true)
+  font:java.awt.Font = new java.awt.Font("Courier New", 1, 20)
+  label.setFont(font)
+
+  frame.add(label)
+  frameDim:java.awt.Dimension = new java.awt.Dimension(1000, 700)
+  frame.setSize(frameDim)
+  frame.setDefaultCloseOperation(3)
+
+  keyListener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
+    keyPressed(e:java.awt.event.KeyEvent): void => {
+      code:int = e.getKeyCode()
+
+      if code == 87 {
+        current:int = getInt(leftPaddleY, 0)
+        newVal:int = max(1, current - 2)
+        setInt(leftPaddleY, 0, newVal)
+      } else {
+        if code == 83 {
+          current:int = getInt(leftPaddleY, 0)
+          newVal:int = min(24, current + 2)
+          setInt(leftPaddleY, 0, newVal)
+        } else {
+          if code == 38 {
+            current:int = getInt(rightPaddleY, 0)
+            newVal:int = max(1, current - 2)
+            setInt(rightPaddleY, 0, newVal)
+          } else {
+            if code == 40 {
+              current:int = getInt(rightPaddleY, 0)
+              newVal:int = min(24, current + 2)
+              setInt(rightPaddleY, 0, newVal)
+            } else {
+              printstr("")
+            }
+          }
+        }
+      }
+    }
+    keyReleased(e:java.awt.event.KeyEvent): void => { printstr("") }
+    keyTyped(e:java.awt.event.KeyEvent): void => { printstr("") }
+  }
+
+  frame.addKeyListener(keyListener)
+
+  timer:javax.swing.Timer = proxy java.awt.event.ActionListener {
+    actionPerformed(e:java.awt.event.ActionEvent): void => {
+      x:int = getInt(ballX, 0)
+      y:int = getInt(ballY, 0)
+      dx:int = getInt(ballDX, 0)
+      dy:int = getInt(ballDY, 0)
+      leftY:int = getInt(leftPaddleY, 0)
+      rightY:int = getInt(rightPaddleY, 0)
+
+      newX:int = x + dx
+      newY:int = y + dy
+      newDX:int = dx
+      newDY:int = dy
+
+      if newY <= 1 {
+        newDY = 0 - dy
+      } else {
+        if newY >= 29 {
+          newDY = 0 - dy
+        } else {
+          newDY = dy
+        }
+      }
+
+      if newX <= 3 {
+        if newY >= leftY {
+          if newY <= leftY + 6 {
+            newDX = 0 - dx
+          } else {
+            newDX = dx
+          }
+        } else {
+          newDX = dx
+        }
+      } else {
+        if newX >= 75 {
+          if newY >= rightY {
+            if newY <= rightY + 6 {
+              newDX = 0 - dx
+            } else {
+              newDX = dx
+            }
+          } else {
+            newDX = dx
+          }
+        } else {
+          newDX = dx
+        }
+      }
+
+      if newX <= 0 {
+        rs:int = getInt(rightScore, 0)
+        setInt(rightScore, 0, rs + 1)
+        setInt(ballX, 0, 40)
+        setInt(ballY, 0, 15)
+        setInt(ballDX, 0, 1)
+        setInt(ballDY, 0, 1)
+      } else {
+        if newX >= 78 {
+          ls:int = getInt(leftScore, 0)
+          setInt(leftScore, 0, ls + 1)
+          setInt(ballX, 0, 40)
+          setInt(ballY, 0, 15)
+          setInt(ballDX, 0, 0 - 1)
+          setInt(ballDY, 0, 1)
+        } else {
+          setInt(ballX, 0, newX)
+          setInt(ballY, 0, newY)
+          setInt(ballDX, 0, newDX)
+          setInt(ballDY, 0, newDY)
+        }
+      }
+
+      xFinal:int = getInt(ballX, 0)
+      yFinal:int = getInt(ballY, 0)
+      leftYFinal:int = getInt(leftPaddleY, 0)
+      rightYFinal:int = getInt(rightPaddleY, 0)
+      lsNew:int = getInt(leftScore, 0)
+      rsNew:int = getInt(rightScore, 0)
+
+      builder:java.lang.StringBuilder = new java.lang.StringBuilder()
+      builder.append("<html><pre>")
+      builder.append("LASM PONG<br><br>")
+      builder.append("Score: ")
+      builder.append(lsNew)
+      builder.append(" : ")
+      builder.append(rsNew)
+      builder.append("<br><br>")
+      builder.append("==============================================================================<br>")
+
+      row:int = 0
+      row = 1
+      if row >= 1 {
+        if yFinal == row {
+          builder.append("| ")
+          builder.append("                                       O")
+          builder.append("                                       |<br>")
+        } else {
+          builder.append("|                                                                            |<br>")
+        }
+      } else {
+        printstr("")
+      }
+
+      builder.append("|                                                                            |<br>")
+      builder.append("==============================================================================<br>")
+      builder.append("<br>W/S: Left Paddle   Up/Down: Right Paddle   First to 10 wins!")
+      builder.append("</pre></html>")
+
+      display:java.lang.String = builder.toString()
+      label.setText(display)
+    }
+  }
+
+  timerObj:javax.swing.Timer = new javax.swing.Timer(50, timer)
+  timerObj.start()
+
+  frame.setVisible(true)
+  printstr("LASM PONG Started!")
+  printstr("Click the window, then use W/S for left paddle, Up/Down for right paddle")
+  42
+}
+
+main()

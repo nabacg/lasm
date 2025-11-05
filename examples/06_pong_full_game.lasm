@@ -1,0 +1,227 @@
+fn createIntArray(size: int): java.lang.Object => {
+  intType:java.lang.Class = java.lang.Integer/TYPE
+  java.lang.reflect.Array/newInstance(intType, size)
+}
+
+fn getArrayElement(arr: java.lang.Object, index: int): int => {
+  java.lang.reflect.Array/getInt(arr, index)
+}
+
+fn setArrayElement(arr: java.lang.Object, index: int, value: int): void => {
+  java.lang.reflect.Array/setInt(arr, index, value)
+}
+
+fn max(a: int, b: int): int => {
+  if a > b
+    a
+  else
+    b
+}
+
+fn min(a: int, b: int): int => {
+  if a < b
+    a
+  else
+    b
+}
+
+fn abs(x: int): int => {
+  if x < 0
+    0 - x
+  else
+    x
+}
+
+fn main(): int => {
+  ballX:java.lang.Object = createIntArray(1)
+  ballY:java.lang.Object = createIntArray(1)
+  ballDX:java.lang.Object = createIntArray(1)
+  ballDY:java.lang.Object = createIntArray(1)
+  leftPaddleY:java.lang.Object = createIntArray(1)
+  rightPaddleY:java.lang.Object = createIntArray(1)
+  leftScore:java.lang.Object = createIntArray(1)
+  rightScore:java.lang.Object = createIntArray(1)
+
+  setArrayElement(ballX, 0, 400)
+  setArrayElement(ballY, 0, 300)
+  setArrayElement(ballDX, 0, 3)
+  setArrayElement(ballDY, 0, 2)
+  setArrayElement(leftPaddleY, 0, 250)
+  setArrayElement(rightPaddleY, 0, 250)
+  setArrayElement(leftScore, 0, 0)
+  setArrayElement(rightScore, 0, 0)
+
+  frame:javax.swing.JFrame = new javax.swing.JFrame("LASM PONG - Full Game")
+  panel:javax.swing.JPanel = new javax.swing.JPanel()
+  black:java.awt.Color = new java.awt.Color(0, 0, 0)
+  panel.setBackground(black)
+
+  ballLabel:javax.swing.JLabel = new javax.swing.JLabel("O")
+  white:java.awt.Color = new java.awt.Color(255, 255, 255)
+  ballLabel.setForeground(white)
+  font:java.awt.Font = new java.awt.Font("Courier New", 1, 24)
+  ballLabel.setFont(font)
+
+  leftPaddleLabel:javax.swing.JLabel = new javax.swing.JLabel("||")
+  leftPaddleLabel.setForeground(white)
+  leftPaddleLabel.setFont(font)
+
+  rightPaddleLabel:javax.swing.JLabel = new javax.swing.JLabel("||")
+  rightPaddleLabel.setForeground(white)
+  rightPaddleLabel.setFont(font)
+
+  scoreLabel:javax.swing.JLabel = new javax.swing.JLabel("0 : 0")
+  scoreLabel.setForeground(white)
+  bigFont:java.awt.Font = new java.awt.Font("Courier New", 1, 36)
+  scoreLabel.setFont(bigFont)
+
+  panel.add(scoreLabel)
+  panel.add(ballLabel)
+  panel.add(leftPaddleLabel)
+  panel.add(rightPaddleLabel)
+  frame.add(panel)
+
+  d:java.awt.Dimension = new java.awt.Dimension(800, 600)
+  frame.setSize(d)
+  frame.setDefaultCloseOperation(3)
+
+  keyListener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
+    keyPressed(e:java.awt.event.KeyEvent): void => {
+      code:int = e.getKeyCode()
+      currentLeft:int = getArrayElement(leftPaddleY, 0)
+      currentRight:int = getArrayElement(rightPaddleY, 0)
+
+      if code == 87 {
+        newLeft:int = max(0, currentLeft - 20)
+        setArrayElement(leftPaddleY, 0, newLeft)
+      } else {
+        if code == 83 {
+          newLeft:int = min(500, currentLeft + 20)
+          setArrayElement(leftPaddleY, 0, newLeft)
+        } else {
+          if code == 38 {
+            newRight:int = max(0, currentRight - 20)
+            setArrayElement(rightPaddleY, 0, newRight)
+          } else {
+            if code == 40 {
+              newRight:int = min(500, currentRight + 20)
+              setArrayElement(rightPaddleY, 0, newRight)
+            } else {
+              printstr("other key")
+            }
+          }
+        }
+      }
+    }
+    keyReleased(e:java.awt.event.KeyEvent): void => {
+      printstr("")
+    }
+    keyTyped(e:java.awt.event.KeyEvent): void => {
+      printstr("")
+    }
+  }
+
+  frame.addKeyListener(keyListener)
+
+  timer:javax.swing.Timer = proxy java.awt.event.ActionListener {
+    actionPerformed(e:java.awt.event.ActionEvent): void => {
+      x:int = getArrayElement(ballX, 0)
+      y:int = getArrayElement(ballY, 0)
+      dx:int = getArrayElement(ballDX, 0)
+      dy:int = getArrayElement(ballDY, 0)
+      leftY:int = getArrayElement(leftPaddleY, 0)
+      rightY:int = getArrayElement(rightPaddleY, 0)
+
+      newX:int = x + dx
+      newY:int = y + dy
+      newDX:int = dx
+      newDY:int = dy
+
+      if newY <= 0 {
+        newDY = 0 - dy
+        newY = 1
+      } else {
+        if newY >= 580 {
+          newDY = 0 - dy
+          newY = 579
+        } else {
+          newDY = dy
+        }
+      }
+
+      if newX <= 30 {
+        if newY >= leftY {
+          if newY <= leftY + 100 {
+            newDX = 0 - dx
+            newX = 31
+          } else {
+            newDX = dx
+          }
+        } else {
+          newDX = dx
+        }
+      } else {
+        if newX >= 750 {
+          if newY >= rightY {
+            if newY <= rightY + 100 {
+              newDX = 0 - dx
+              newX = 749
+            } else {
+              newDX = dx
+            }
+          } else {
+            newDX = dx
+          }
+        } else {
+          newDX = dx
+        }
+      }
+
+      if newX <= 0 {
+        rightScoreVal:int = getArrayElement(rightScore, 0)
+        setArrayElement(rightScore, 0, rightScoreVal + 1)
+        setArrayElement(ballX, 0, 400)
+        setArrayElement(ballY, 0, 300)
+        setArrayElement(ballDX, 0, 3)
+        setArrayElement(ballDY, 0, 2)
+
+        ls:int = getArrayElement(leftScore, 0)
+        rs:int = getArrayElement(rightScore, 0)
+        scoreLabel.setText("Score updated")
+      } else {
+        if newX >= 800 {
+          leftScoreVal:int = getArrayElement(leftScore, 0)
+          setArrayElement(leftScore, 0, leftScoreVal + 1)
+          setArrayElement(ballX, 0, 400)
+          setArrayElement(ballY, 0, 300)
+          setArrayElement(ballDX, 0, 0 - 3)
+          setArrayElement(ballDY, 0, 2)
+
+          ls:int = getArrayElement(leftScore, 0)
+          rs:int = getArrayElement(rightScore, 0)
+          scoreLabel.setText("Score updated")
+        } else {
+          setArrayElement(ballX, 0, newX)
+          setArrayElement(ballY, 0, newY)
+          setArrayElement(ballDX, 0, newDX)
+          setArrayElement(ballDY, 0, newDY)
+        }
+      }
+
+      ballLabel.setText("O")
+      leftPaddleLabel.setText("||")
+      rightPaddleLabel.setText("||")
+    }
+  }
+
+  timerObj:javax.swing.Timer = new javax.swing.Timer(16, timer)
+  timerObj.start()
+
+  frame.setVisible(true)
+  printstr("LASM PONG Started!")
+  printstr("Controls: W/S for left paddle, Up/Down arrows for right paddle")
+  printstr("First to 10 points wins!")
+  42
+}
+
+main()
