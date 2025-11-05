@@ -19,7 +19,7 @@ Prog := wc TopLevelExpr (ws expr-delim+ ws TopLevelExpr)* wc
 <comma-delimited-exprs> := Expr (ws comma ws Expr)*
 VarExpr := symbol[TypeAnnotation]
 StringExpr := <'\"'> #'[.[^\"]]*' <'\"'>
-NumExpr := #'[0-9]+'
+NumExpr := #'-?[0-9]+'
 BoolExpr := 'true' | 'false'
 VarDefExpr := VarExpr ws <'='> ws Expr
 IfExpr := <'if'> ws EqOpExpr wc  Expr wc <'else'> wc Expr wc

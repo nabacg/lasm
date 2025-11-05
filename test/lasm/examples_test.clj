@@ -122,8 +122,7 @@
         (let [ast-tree (p/parse-tree-to-ast parsed)]
           (is (vector? ast-tree) "Should produce AST"))))))
 
-;; DISABLED: Parser failing - investigate why static method call doesn't parse
-#_(deftest test-static-method-calls
+(deftest test-static-method-calls
   (testing "Static method calls with / syntax"
     (let [code "result:int = java.lang.Math/abs(-42)\nprintint(result)"
           parsed (p/parser code)]
@@ -132,9 +131,11 @@
       (when-not (insta/failure? parsed)
         (let [ast-tree (p/parse-tree-to-ast parsed)]
           (is (vector? ast-tree) "Should produce AST")
-          ;; Check for StaticInteropCall in AST
-          (is (some #(= :StaticInteropCall (first %)) (flatten ast-tree))
-              "AST should contain static interop call"))))))
+          ;; Check for StaticInteropCall nested in the VarDef
+          (let [var-def (first ast-tree)
+                static-call (get var-def 2)]
+            (is (= :StaticInteropCall (first static-call))
+                "AST should contain static interop call")))))))
 
 (deftest test-multiline-function-definition
   (testing "Multi-line function definitions with braces"
