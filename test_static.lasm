@@ -1,0 +1,2 @@
+result:int = java.lang.Math/abs(-42)
+printint(result)
