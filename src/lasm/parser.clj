@@ -32,13 +32,14 @@ FunDefExpr := <'fn'> ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=
 TypeExpr := 'bool' | 'string' | 'int' | 'void' | fullyQualifiedType
 params := VarExpr? (ws <','> ws VarExpr)*
 body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
+proxy-body := <'{'> wc Expr ws (expr-delim ws Expr)* wc <'}'>
 FunCallExpr := symbol  <'('> comma-delimited-exprs? <')'>
 StaticInteropCallExpr := fullyQualifiedType<'/'>symbol <'('> comma-delimited-exprs? <')'>
 StaticFieldAccessExpr := fullyQualifiedType<'/'>symbol
 InteropCallExpr := ( StringExpr | VarExpr | FunCallExpr )<'.'>symbol<'('> comma-delimited-exprs? <')'>
 CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
 ProxyExpr := <'proxy'> ws fullyQualifiedType ws <'{'> wc ProxyMethod+ wc <'}'>
-ProxyMethod := symbol ws <'('> ws params ws <')'> TypeAnnotation ws <'=>'> ws body"))
+ProxyMethod := symbol ws <'('> ws params ws <')'> TypeAnnotation ws <'=>'> ws proxy-body"))
 
 
 

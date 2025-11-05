@@ -15,7 +15,7 @@ fn main(): int => {
   frame.setVisible(true)
 
   listener:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
-    actionPerformed(e:java.awt.event.ActionEvent): void => ballLabel.setText("  PONG!  ")
+    actionPerformed(e:java.awt.event.ActionEvent): void => { ballLabel.setText("  PONG!  ") }
   }
   timer:javax.swing.Timer = new javax.swing.Timer(500, listener)
   timer.start()

@@ -1,0 +1,10 @@
+fn testKeyListener(): int => {
+  listener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
+    keyPressed(e:java.awt.event.KeyEvent): void => { printstr("pressed") }
+    keyReleased(e:java.awt.event.KeyEvent): void => { printstr("released") }
+    keyTyped(e:java.awt.event.KeyEvent): void => { printstr("typed") }
+  }
+  42
+}
+
+testKeyListener()
