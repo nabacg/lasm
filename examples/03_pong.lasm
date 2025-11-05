@@ -3,7 +3,6 @@ fn createGameFrame(): javax.swing.JFrame => {
     frame.setSize(800, 600)
     frame.setDefaultCloseOperation(3)
     frame.setResizable(false)
-    frame.setLocationRelativeTo(null)
     frame
 }
 
