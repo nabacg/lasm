@@ -201,26 +201,35 @@
 
 ;(require '[lasm.decompiler :as decomp])
 
-(defn make-fn [{:keys [class-name body] :as fn-definition}]
+(defn make-fn-bytecode
+  "Generate bytecode for a function without loading it into the classloader.
+   Returns the bytecode as a byte array.
+   This is used by the JAR compiler to package functions into JAR files."
+  [{:keys [class-name body] :as fn-definition}]
   (let [writer (ClassWriter. ClassWriter/COMPUTE_FRAMES)
         body   (if (= :return (first (last body))) body (conj body [:return]))]
 
-    (println "make-fn name=" class-name " body=")
-    (pprint/pprint body)
     (initialize-class writer class-name)
-
     (generate-default-ctor writer)
     (make-static-method writer "invoke" (assoc fn-definition :body body))
     (.visitEnd writer)
+    (.toByteArray ^ClassWriter writer)))
+
+(defn make-fn
+  "Compile a function and load it into the classloader for immediate execution."
+  [{:keys [class-name body] :as fn-definition}]
+  (let [bytecode (make-fn-bytecode fn-definition)]
+
+    (println "make-fn name=" class-name " body=")
+    (pprint/pprint body)
+
     (.defineClass ^clojure.lang.DynamicClassLoader
                   (clojure.lang.DynamicClassLoader.)
                   (.replace ^String class-name \/ \.)
-                  (.toByteArray ^ClassWriter writer) nil)
-    (decomp/to-bytecode (.toByteArray ^ClassWriter  writer)
-                       class-name)
+                  bytecode nil)
+    (decomp/to-bytecode bytecode class-name)
 
-    #_(decomp/to-java (.toByteArray ^ClassWriter  writer)
-                    class-name)
+    #_(decomp/to-java bytecode class-name)
     class-name))
 
 

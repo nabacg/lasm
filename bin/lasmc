@@ -1,0 +1,129 @@
+#!/bin/bash
+# Lasm Compiler - Compile .lasm files to standalone JAR files
+#
+# Usage:
+#   lasmc input.lasm              # Creates input.jar
+#   lasmc input.lasm -o out.jar   # Creates out.jar
+#   lasmc -h                      # Show help
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+show_help() {
+    cat << EOF
+Lasm Compiler (lasmc) - Compile lasm to standalone JAR files
+
+Usage:
+    lasmc <input.lasm>              Compile to <input.jar>
+    lasmc <input.lasm> -o <out.jar> Compile to specified output
+    lasmc -h, --help                Show this help
+
+Examples:
+    lasmc examples/03_pong.lasm
+    lasmc examples/03_pong.lasm -o pong.jar
+    lasmc hello.lasm -o bin/hello.jar
+
+The generated JAR can be run with:
+    java -jar output.jar
+
+Options:
+    -o, --output    Specify output JAR file path
+    -h, --help      Show this help message
+    -v, --verbose   Show detailed compilation output
+
+EOF
+    exit 0
+}
+
+# Parse arguments
+INPUT_FILE=""
+OUTPUT_FILE=""
+VERBOSE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            ;;
+        -o|--output)
+            OUTPUT_FILE="$2"
+            shift 2
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        -*)
+            echo -e "${RED}Error: Unknown option $1${NC}"
+            echo "Use 'lasmc --help' for usage information"
+            exit 1
+            ;;
+        *)
+            if [ -z "$INPUT_FILE" ]; then
+                INPUT_FILE="$1"
+            else
+                echo -e "${RED}Error: Multiple input files specified${NC}"
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Validate input
+if [ -z "$INPUT_FILE" ]; then
+    echo -e "${RED}Error: No input file specified${NC}"
+    echo "Use 'lasmc --help' for usage information"
+    exit 1
+fi
+
+if [ ! -f "$INPUT_FILE" ]; then
+    echo -e "${RED}Error: Input file not found: $INPUT_FILE${NC}"
+    exit 1
+fi
+
+# Default output file if not specified
+if [ -z "$OUTPUT_FILE" ]; then
+    OUTPUT_FILE="${INPUT_FILE%.lasm}.jar"
+fi
+
+# Get script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
+# Compile
+echo -e "${BLUE}Lasm Compiler${NC}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Input:  $INPUT_FILE"
+echo "Output: $OUTPUT_FILE"
+echo ""
+
+cd "$PROJECT_ROOT"
+
+if [ "$VERBOSE" = true ]; then
+    clj -M -e "
+    (require '[lasm.jar :as jar])
+    (jar/compile-file \"$INPUT_FILE\" \"$OUTPUT_FILE\")
+    "
+else
+    clj -M -e "
+    (require '[lasm.jar :as jar])
+    (jar/compile-file \"$INPUT_FILE\" \"$OUTPUT_FILE\")
+    " 2>&1 | grep -E "(Compiling|Created|Entry point|Classes|Run with)" || true
+fi
+
+if [ $? -eq 0 ]; then
+    echo ""
+    echo -e "${GREEN}✓ Compilation successful!${NC}"
+    echo ""
+    echo "Run with:"
+    echo "  java -jar $OUTPUT_FILE"
+else
+    echo -e "${RED}✗ Compilation failed${NC}"
+    exit 1
+fi

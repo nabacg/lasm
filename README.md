@@ -9,10 +9,11 @@ Lasm is a statically-typed functional programming language that compiles directl
 ## Features
 
 - 🔧 **JVM Bytecode Compilation** - Compiles directly to bytecode using ASM
+- 📦 **JAR Compiler** - Compile to standalone JAR files (`java -jar myapp.jar`)
 - ☕ **Java Interop** - Call any Java library, create objects, invoke methods
 - 🎯 **Strong Typing** - Static type checking with type inference
 - 🔄 **Functional** - Immutable variables, expression-based, pure functions
-- 📦 **Simple Syntax** - Clean and readable syntax inspired by modern functional languages
+- 📝 **Simple Syntax** - Clean and readable syntax inspired by modern functional languages
 
 ## Quick Examples
 
@@ -43,6 +44,20 @@ frame.pack()
 frame.setVisible(true)
 ```
 
+## JAR Compiler - NEW! 🎉
+
+Compile lasm programs to standalone executable JARs:
+
+```bash
+# Compile to JAR
+./bin/lasmc examples/03_pong.lasm -o pong.jar
+
+# Run anywhere with Java
+java -jar pong.jar
+```
+
+See [JAR_COMPILER.md](JAR_COMPILER.md) for complete documentation.
+
 ## Examples
 
 Check out the [`examples/`](examples/) directory for complete examples including:
@@ -51,7 +66,7 @@ Check out the [`examples/`](examples/) directory for complete examples including
 - **Pong game demo** - A complete game showcasing the language
 - Game logic and physics simulation
 
-See [examples/README.md](examples/README.md) for detailed documentation.
+All examples can be compiled to standalone JARs! See [examples/README.md](examples/README.md) for detailed documentation.
 
 ## Language Syntax
 
