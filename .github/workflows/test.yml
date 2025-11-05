@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master, main, 'claude/**', 'scratch/**' ]
   pull_request:
     branches: [ master, main ]
 
@@ -27,7 +27,8 @@ jobs:
         cli: 1.11.1.1273
 
     - name: Cache Clojure dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
+      continue-on-error: true
       with:
         path: |
           ~/.m2/repository
