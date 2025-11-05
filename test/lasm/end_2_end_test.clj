@@ -5,17 +5,17 @@
             [lasm.emit :as emit]))
 
 
-(t/deftest sample-fibonacci
-  (t/is 10 (-> (p/parser
+(t/deftest sample-factorial
+  (t/is (= 24 (-> (p/parser
                 "fn fact(x:int): int =>
   if x <= 1
      1
   else
       x *fact(x-1)
   fact(4)")
-               p/parse-tree-to-ast 
+               p/parse-tree-to-ast
                ast/build-program
-               emit/emit-and-run!)))
+               emit/emit-and-run!))))
 
 
 #_(t/deftest sample-fibonacci-with-type-check
@@ -32,14 +32,14 @@
 
 
 
-(t/deftest sample-fibonacci
-  (t/is "Hello Johnny" (-> (p/parser
+(t/deftest sample-string-ops
+  (t/is (= "Hello Johnny" (-> (p/parser
 "fn HelloWorld(x: string): string => {  \"Hello \".concat(x) }
 fn NewMain(n: string):string => { HelloWorld(n) }
              NewMain(\"Johnny\")")
-               p/parse-tree-to-ast 
-               ast/build-program 
-               emit/emit-and-run!)))
+               p/parse-tree-to-ast
+               ast/build-program
+               emit/emit-and-run!))))
 
 
 
