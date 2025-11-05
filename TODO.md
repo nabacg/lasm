@@ -4,9 +4,14 @@
 
 This document outlines all tasks required to implement a fully functional Pong game with animations, keyboard input, and AI opponent. Tasks are organized by priority and dependencies.
 
-**Current Status**: ✅ Parser fixed, KeyListener working, Full game mechanics implemented!
+**Current Status**: ⚠️ Parser fixed ✅, KeyListener working ✅, Game files have SYNTAX ERRORS ❌
 
-**Latest**: All core game mechanics complete (P0.1-P5.2). Game is playable with keyboard controls, physics, collision detection, and scoring.
+**Critical Issue Found**: Files 06-09 use `if { statements }` syntax which LASM grammar doesn't support. Need to rewrite using single-expression if-else or extend grammar.
+
+**Actual Status**:
+- ✅ P0.1 Parser fix - WORKING
+- ✅ P1.1 KeyListener - WORKING (simple version)
+- ❌ P2-P5 Game logic - Code exists but DOESN'T PARSE
 
 ---
 
@@ -929,12 +934,58 @@ fn updateAIWithDifficulty(difficulty: int, ...): void => {
 
 ## Known Bugs and Issues
 
-### B1: Parser Grammar Ambiguity
+### B0: If-Statement Blocks Not Supported (NEW - CRITICAL) ❌
 
-**Status**: CRITICAL
-**Affects**: All keyboard input, multi-method interfaces
-**Workaround**: Use 1-2 method interfaces only
-**Fix**: P0.1
+**Status**: CRITICAL - BLOCKS GAME IMPLEMENTATION
+**Discovered**: During Pong implementation
+**Affects**: Any code needing multiple statements in if-else branches
+
+**Problem**: Grammar only supports single expressions in if-else:
+```ebnf
+IfExpr := <'if'> ws EqOpExpr wc Expr wc <'else'> wc Expr wc
+```
+
+**Invalid (doesn't parse)**:
+```lasm
+if condition {
+  statement1
+  statement2
+} else {
+  statement3
+}
+```
+
+**Valid (works)**:
+```lasm
+if condition
+  single_expression
+else
+  single_expression
+```
+
+**Impact**:
+- Files 06-09 (game implementations) FAIL TO PARSE
+- Complex logic requires deeply nested ternary expressions or many helper functions
+- Game logic essentially impossible without this or loops
+
+**Workarounds**:
+1. Extract multi-statement blocks into helper functions
+2. Use deeply nested if-else chains (ugly, hard to read)
+3. Restructure logic to use single expressions
+
+**Proper Fix Options**:
+- **Option A**: Add statement blocks to if-else (grammar change)
+- **Option B**: Add `do { statements }` expression form
+- **Option C**: Document as limitation and work around it
+
+**Priority**: P0 (Blocker) - Without this OR loops, complex programs are impractical
+
+### B1: Parser Grammar Ambiguity ✅ FIXED
+
+**Status**: FIXED IN P0.1
+**Affects**: Multi-method interfaces (WAS critical)
+**Fix**: Added `proxy-body` rule requiring braces
+**Workaround**: No longer needed
 
 ### B2: No Local Variables in Proxy Methods
 
