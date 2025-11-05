@@ -1,0 +1,22 @@
+fn MakeFrame(): int => {
+    frame:javax.swing.JFrame = new javax.swing.JFrame("Lasm Pong Game")
+    label:javax.swing.JLabel = new javax.swing.JLabel("PONG - A Lasm Demo")
+    container:java.awt.Container = frame.getContentPane()
+    container.add(label)
+    frame.pack()
+    frame.setVisible(true)
+    42
+}
+
+printstr("=================================")
+printstr("  Lasm Pong Game Demo")
+printstr("=================================")
+printstr("Creating game window...")
+MakeFrame()
+printstr("Window created!")
+printstr("This demo shows:")
+printstr("- Object creation with 'new' keyword")
+printstr("- Java interop (Swing components)")
+printstr("- Function composition")
+printstr("")
+printstr("Close the window to exit.")
