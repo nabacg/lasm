@@ -1,0 +1,90 @@
+fn abs(x: int): int => {
+    if x < 0
+        0 - x
+    else
+        x
+}
+
+fn calculateBallX(x: int, vx: int): int => {
+    x + vx
+}
+
+fn calculateBallY(y: int, vy: int): int => {
+    y + vy
+}
+
+fn checkBoundaryX(x: int, width: int): bool => {
+    if x < 0
+        true
+    else
+        if x > width
+            true
+        else
+            false
+}
+
+fn checkBoundaryY(y: int, height: int): bool => {
+    if y < 0
+        true
+    else
+        if y > height
+            true
+        else
+            false
+}
+
+fn flipVelocity(v: int): int => {
+    0 - v
+}
+
+fn simulateFrame(ballX: int, ballY: int, vx: int, vy: int): int => {
+    newX: int = calculateBallX(ballX, vx)
+    newY: int = calculateBallY(ballY, vy)
+
+    hitBoundaryX: bool = checkBoundaryX(newX, 800)
+    hitBoundaryY: bool = checkBoundaryY(newY, 600)
+
+    finalVX: int = if hitBoundaryX
+        flipVelocity(vx)
+    else
+        vx
+
+    finalVY: int = if hitBoundaryY
+        flipVelocity(vy)
+    else
+        vy
+
+    printstr("Ball position:")
+    printint(newX)
+    printint(newY)
+
+    if hitBoundaryX
+        printstr("Ball hit X boundary!")
+    else
+        printstr("Ball moving...")
+
+    newX
+}
+
+fn main(): void => {
+    printstr("=================================")
+    printstr("  Pong Game Logic Demo")
+    printstr("=================================")
+    printstr("")
+    printstr("Simulating ball movement...")
+    printstr("")
+
+    frame1: int = simulateFrame(100, 100, 5, 3)
+    frame2: int = simulateFrame(105, 103, 5, 3)
+    frame3: int = simulateFrame(110, 106, 5, 3)
+
+    printstr("")
+    printstr("Simulation complete!")
+    printstr("This demo shows:")
+    printstr("- Conditional logic (if/else)")
+    printstr("- Function composition")
+    printstr("- Boolean logic")
+    printstr("- Integer arithmetic")
+}
+
+main()
