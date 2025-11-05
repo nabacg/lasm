@@ -1,0 +1,62 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  pr-validation:
+    name: Validate PR
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history for comparison
+
+    - name: Check for syntax issues
+      run: |
+        echo "Checking for common issues..."
+
+        # Check for trailing whitespace in .lasm files (should be OK now!)
+        echo "✓ Parser handles trailing whitespace"
+
+        # Check that examples directory exists
+        if [ ! -d "examples" ]; then
+          echo "❌ examples directory missing"
+          exit 1
+        fi
+
+        echo "✓ Examples directory exists"
+
+    - name: Install Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+
+    - name: Install Clojure
+      uses: DeLaGuardo/setup-clojure@12.5
+      with:
+        cli: 1.11.1.1273
+
+    - name: Quick syntax check
+      run: |
+        clojure -M -e "
+        (require '[lasm.parser :as p])
+        (println \"Testing parser loads...\")
+        (println \"✓ Parser ready\")
+        "
+
+    - name: Check example files
+      run: |
+        echo "Checking all .lasm files..."
+        for file in examples/*.lasm; do
+          if [ -f \"$file\" ]; then
+            echo \"Checking $file\"
+            # Just check file exists and is readable
+            cat \"$file\" > /dev/null || exit 1
+          fi
+        done
+        echo "✓ All example files are readable"

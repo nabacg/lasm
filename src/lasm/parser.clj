@@ -6,7 +6,7 @@
 (def parser
   (insta/parser
 "
-Prog := TopLevelExpr (ws expr-delim+ ws TopLevelExpr)*
+Prog := wc TopLevelExpr (ws expr-delim+ ws TopLevelExpr)* wc
 <TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr | CtorInteropExpr
 <Expr> := TopLevelExpr | BoolExpr | StringExpr | NumExpr | VarExpr | IfExpr | BinOpExpr | EqOpExpr 
 <expr-delim> := <';'> | newline
