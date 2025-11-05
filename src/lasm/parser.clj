@@ -7,13 +7,13 @@
   (insta/parser
 "
 Prog := wc TopLevelExpr (ws expr-delim+ ws TopLevelExpr)* wc
-<TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr | CtorInteropExpr
-<Expr> := TopLevelExpr | BoolExpr | StringExpr | NumExpr | VarExpr | IfExpr | BinOpExpr | EqOpExpr 
+<TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr | StaticFieldAccessExpr | CtorInteropExpr
+<Expr> := TopLevelExpr | BoolExpr | StringExpr | NumExpr | VarExpr | IfExpr | BinOpExpr | EqOpExpr
 <expr-delim> := <';'> | newline
 <newline> := <'\n'>
 <ws> := <' '>*
 <wc> := (ws | newline)*
-<symbol> :=  #'^(?!true|false)[a-zA-Z][a-zA-Z0-9]*'
+<symbol> :=  #'^(?!true|false)[a-zA-Z][a-zA-Z0-9_]*'
 <fullyQualifiedType> := #'[a-zA-Z][\\.a-zA-Z0-9]*'
 <comma> := <','>
 <comma-delimited-exprs> := Expr (ws comma ws Expr)*
@@ -28,12 +28,13 @@ EqOpExpr  := Expr ws EqOp ws Expr
 BinOp :=  '+' | '-' | '/' | '*'
 EqOp := '>' | '<' | '>=' | '<=' | '==' | '!='
 <TypeAnnotation> := ws <':'> ws TypeExpr
-FunDefExpr := <'fn'>ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=>'> ws body
+FunDefExpr := <'fn'> ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=>'> ws body
 TypeExpr := 'bool' | 'string' | 'int' | 'void' | fullyQualifiedType
 params := VarExpr? (ws <','> ws VarExpr)*
 body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
 FunCallExpr := symbol  <'('> comma-delimited-exprs? <')'>
 StaticInteropCallExpr := fullyQualifiedType<'/'>symbol <'('> comma-delimited-exprs? <')'>
+StaticFieldAccessExpr := fullyQualifiedType<'/'>symbol
 InteropCallExpr := ( StringExpr | VarExpr | FunCallExpr )<'.'>symbol<'('> comma-delimited-exprs? <')'>
 CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>"))
 
@@ -99,12 +100,14 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
 (defmethod trans-to-ast :IfExpr [[_ & exprs]]
   (into [:If] (mapv trans-to-ast exprs)))
 
-(defmethod trans-to-ast :FunDefExpr [[_ fn-name [_ & params] return-type  [_ & body]]]
-  (into
-   [:FunDef {:args (mapv trans-param params)
-             :fn-name fn-name
-             :return-type  return-type}]
-   (mapv trans-to-ast body)))
+(defmethod trans-to-ast :FunDefExpr [[_ fn-name params-node return-type body-node]]
+  (let [[_ & params] params-node
+        [_ & body] body-node]
+    (into
+     [:FunDef {:args (mapv trans-param params)
+               :fn-name fn-name
+               :return-type (trans-type return-type)}]
+     (mapv trans-to-ast body))))
 
 (defmethod trans-to-ast :FunCallExpr [[_ fn-name & arg-exprs]]
   (into
@@ -131,6 +134,11 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
     {:class-name  class-name
      :method-name method-name}]
    (mapv trans-to-ast args)))
+
+(defmethod trans-to-ast :StaticFieldAccessExpr [[_ class-name field-name]]
+  [:StaticFieldAccess
+   {:class-name class-name
+    :field-name field-name}])
 
 (defn parse-tree-to-ast [[_ & exprs]]
   (mapv trans-to-ast exprs))

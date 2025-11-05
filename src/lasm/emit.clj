@@ -127,6 +127,8 @@
     (.push ga (int (:value cmd)))
     :string
     (.push ga ^String (:value cmd))
+    :aconst-null
+    (.visitInsn ga Opcodes/ACONST_NULL)
     :put-field
     (.putField ga (:owner cmd) (:name cmd) (resolve-type (:field-type cmd)))
     :dup

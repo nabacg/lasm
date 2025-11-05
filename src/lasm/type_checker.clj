@@ -5,11 +5,27 @@
            [org.objectweb.asm.commons Method]))
 
 (defn jvm-type-to-ir [java-type-sym]
-  (let [type-name (name java-type-sym)]
-    ;; TODO this should really be a check on whether this is a simple type by (#{int float long double char} ) etc.
-    (if (string/includes? type-name ".")
-      [:class type-name]
-      (keyword type-name))))
+  ;; Handle Java Class objects from reflection
+  (if (instance? Class java-type-sym)
+    (let [class-name (.getName ^Class java-type-sym)]
+      (case class-name
+        "int" :int
+        "long" :long
+        "boolean" :boolean
+        "void" :void
+        "double" :double
+        "float" :float
+        "byte" :byte
+        "short" :short
+        "char" :char
+        ;; For object types, return [:class "fully.qualified.Name"]
+        [:class class-name]))
+    ;; Handle symbols/keywords
+    (let [type-name (name java-type-sym)]
+      ;; TODO this should really be a check on whether this is a simple type by (#{int float long double char} ) etc.
+      (if (string/includes? type-name ".")
+        [:class type-name]
+        (keyword type-name)))))
 
 (defn ast-expr-to-ir-type [[expr-type & exprs :as expr] tenv]
   (case expr-type
@@ -39,20 +55,25 @@
 (defn can-conform-types? [param-class arg-expr tenv]
   (assert (symbol? param-class)
           "Param-class needs to be a symbol")
-  (println "arg-expr=" arg-expr " param-class=" param-class)
   (if (keyword? arg-expr)
     (case arg-expr
           :bool (= param-class 'boolean)
+          :int (= param-class 'int)
           false)
     (let [arg-type (ast-expr-to-ir-type arg-expr tenv)]
       (cond
         (= param-class arg-type)
         true
+        ;; Handle primitive type matching
+        (and (= arg-type :bool) (= param-class 'boolean))
+        true
+        (and (= arg-type :int) (= param-class 'int))
+        true
         (and (vector? arg-type) (= :class (first arg-type)))
         (let [[_ class-name] arg-type
               java-class (Class/forName class-name)]
           (or (= class-name (name param-class))
-              (contains?             
+              (contains?
                (into #{} (map #(.getName %)  (get-class-ancestors java-class)))
                (name param-class))))
         (= (name param-class) (name arg-type))
@@ -101,28 +122,31 @@
      (first matching-methods))))
 
 (defn symbol->type [sym]
-  (case sym
-    void Type/VOID_TYPE
-    int Type/INT_TYPE
-    long Type/LONG_TYPE
-    boolean Type/BOOLEAN_TYPE
-    :string (Type/getType java.lang.String)
-    :int  Type/INT_TYPE
-    (cond (string/includes? (name sym) "<>")
-          (case (name sym)
-            "byte<>" (Type/getType "[B")
-            (Type/getType (format "[L%s;"  (string/replace
-                                            (string/replace  (name sym) "<>" "")
-                                            "." "/"))))
-          (and (symbol? sym) (= "Array" (namespace sym)))
-          (case (name sym)
-            "int" (Type/getType "[I")
-            "byte" (Type/getType "[B")
-            ;; TODO add other primitive types
-            (Type/getType (format "[L%s;" (string/replace (name sym) "." "/"))))
-          
-          
-          :else (Type/getType ^Class  (Class/forName (name sym))))))
+  ;; Handle [:class "..."] format
+  (if (and (vector? sym) (= :class (first sym)))
+    (Type/getType ^Class (Class/forName (second sym)))
+    (case sym
+      void Type/VOID_TYPE
+      int Type/INT_TYPE
+      long Type/LONG_TYPE
+      boolean Type/BOOLEAN_TYPE
+      :string (Type/getType java.lang.String)
+      :int  Type/INT_TYPE
+      (cond (string/includes? (name sym) "<>")
+            (case (name sym)
+              "byte<>" (Type/getType "[B")
+              (Type/getType (format "[L%s;"  (string/replace
+                                              (string/replace  (name sym) "<>" "")
+                                              "." "/"))))
+            (and (symbol? sym) (= "Array" (namespace sym)))
+            (case (name sym)
+              "int" (Type/getType "[I")
+              "byte" (Type/getType "[B")
+              ;; TODO add other primitive types
+              (Type/getType (format "[L%s;" (string/replace (name sym) "." "/"))))
+
+
+            :else (Type/getType ^Class  (Class/forName (name sym)))))))
 
 (defn to-type-array [syms]
   (into-array Type (map symbol->type syms)))
@@ -145,8 +169,18 @@
      :owner class-type}))
 
 (defn matches-type [expected-type {:keys [type expr env] :as ctx}]
-  (if (= expected-type type)
+  (cond
+    (= expected-type type)
     ctx
+
+    ;; Handle :string <=> [:class "java.lang.String"] equivalence
+    (and (= type :string) (= expected-type [:class "java.lang.String"]))
+    ctx
+
+    (and (= expected-type :string) (= type [:class "java.lang.String"]))
+    ctx
+
+    :else
     (throw (ex-info "Type error" {:expected expected-type
                                   :found type
                                   :expr expr
@@ -192,57 +226,73 @@
           (matches-type falsy-type (assoc ctx :expr falsy)))
     
     :FunDef (let [[_ {:keys [args return-type]} & body] expr
-                  
-                  env' (into env (map (juxt :id :type) args)) ;; extend the env with params                  
-                  tail-expr (last body)]
-
-              ;;TODO check each expr in body, but that should happen in augment 
-              #_(doseq [e body]
-                  ;; soon enough would need to augment-then-synth for more complex op
-                  (matches-type (synth (assoc ctx :expr e :env env'))
-                                (assoc ctx :expr e :env env')))
-
-              (mapv (augment-sub-expr (assoc ctx :env env')) body)
-              
+                  env' (into env (map (juxt :id :type) args)) ;; extend the env with params
+                  ;; Thread environment through body expressions
+                  [final-env augmented-body]
+                  (reduce (fn [[acc-env acc-exprs] e]
+                            (let [[new-env aug-expr] (augment {:expr e :env acc-env})]
+                              [new-env (conj acc-exprs aug-expr)]))
+                          [env' []]
+                          body)
+                  tail-expr (last augmented-body)
+                  fun-type (synth ctx)]
               (matches-type return-type
-                            {:type (synth (assoc ctx :expr tail-expr))
-                             :env env'
+                            {:type (synth {:expr tail-expr :env final-env})
+                             :env final-env
                              :expr tail-expr})
-              (synth ctx)
-              )
+              ctx)
     :FunCall (let [[_ fun-name & fun-args] expr]
-               (println "fun-name=" fun-name ", fun-args=" fun-args)
                (if-let [f-ty (env fun-name) ]
                  (let [{:keys [return-type args]} f-ty]
-                   
                    (matches-type return-type ctx)
                    (doseq [[expected-ty found-expr] (map vector args fun-args)]
                      (matches-type expected-ty
-                                   {:type (synth (assoc ctx
-                                                        :expr found-expr
-                                                        :env env))
+                                   {:type (synth {:expr found-expr :env env})
                                     :expr found-expr
-                                    :env env})))
+                                    :env env}))
+                   ctx)
                  (throw (ex-info (format "unknown function in FunCall expr: %s" fun-name)
                                  {:fun-name fun-name
                                   :expr expr
-                                  :env env})))
-               )
+                                  :env env}))))
+    :CtorInteropCall (let [[_ {:keys [class-name]} & ctor-args] expr]
+                       ;; For now, just check that it matches the expected class type
+                       ;; TODO: validate constructor argument types
+                       (matches-type [:class class-name] ctx))
+    :VarDef (let [[_ {:keys [var-type]} init-expr] expr]
+              ;; Check that the initializer expression matches the variable type
+              (when init-expr
+                (let [init-type (synth {:expr init-expr :env env})]
+                  (matches-type var-type
+                                {:type init-type
+                                 :expr init-expr
+                                 :env env})))
+              ;; VarDef doesn't have a type itself, just return ctx
+              ctx)
+    :InteropCall (let [[_ {:keys [this-expr method-name]} & method-args] expr
+                       method-return-type (synth ctx)]
+                   (matches-type method-return-type ctx))
+    :StaticFieldAccess (let [field-type (synth ctx)]
+                         (matches-type field-type ctx))
     (throw (ex-info "No matching check" {:expr expr :type type}))))
 
 
 ;; ctx -> type
 (defn synth [{:keys [expr env] :as ctx}]
-  
-  (if (not (vector? expr))    
+
+  (if (not (vector? expr))
     (throw (ex-info "augment can only be called with :expr [...]" {:expr expr
                                                                    :env env
                                                                    :type type})))
-  
+
   (case (first expr)
     :Int :int
     :Bool :bool
     :String :string
+    :AddInt :int
+    :SubInt :int
+    :MulInt :int
+    :DivInt :int
     :If (synth { :expr (last expr) :env env})
     :> :boolean
     :== :boolean
@@ -269,24 +319,39 @@
                                  {:var-id (:var-id (second expr))
                                   :expr expr
                                   :env env}))))
+    :CtorInteropCall (let [[_ {:keys [class-name]} & args] expr]
+                       [:class class-name])
+    :InteropCall (let [[_ {:keys [this-expr method-name]} & method-args] expr
+                       this-type (synth {:expr this-expr :env env})
+                       [_ class-name] (if (vector? this-type)
+                                        this-type
+                                        (ast-expr-to-ir-type [this-type] env))
+                       method-sig (lookup-interop-method-signature class-name method-name method-args false env)]
+                   (:return-type method-sig))
+    :StaticFieldAccess (let [[_ {:keys [class-name field-name]}] expr
+                             clazz (Class/forName class-name)
+                             field (.getDeclaredField clazz field-name)
+                             field-type (.getType field)]
+                         (jvm-type-to-ir field-type))
     (throw (ex-info "No Matching synth" {:expr expr :env env}))))
 
 ;; ctx -> expr
 (defn augment-sub-expr [{:keys [env type expr] :as parent-ctx}]
   (fn [e]
     ;; first augment the sub-expr in the parent-ctx, but without parent :type
-    (try 
-      (let [res (augment (assoc (dissoc parent-ctx :type) :expr e))]
-        (check {:env env
-                :expr res  
-                :type (synth {:env env
-                              :expr res})})
-        res)
+    (try
+      (let [[env' augmented-expr] (augment (assoc (dissoc parent-ctx :type) :expr e))]
+        (check {:env env'
+                :expr augmented-expr
+                :type (synth {:env env'
+                              :expr augmented-expr})})
+        augmented-expr)
       (catch  clojure.lang.ExceptionInfo e
         (throw (ex-info "augment-sub-expr Exception" {:parent-ctx parent-ctx
                                                   :type type
                                                   :expr expr
                                                   :env env
+                                                      :sub-expr e
                                                       :original-exception (.data e)})))
       (catch  Exception e
         (throw e)))))
@@ -304,7 +369,7 @@
   (when type
     (:expr (check ctx))) ;; TODO should this return an expr not a ctx ?
 
-  (if (not (vector? expr))    
+  (if (not (vector? expr))
     (throw (ex-info "augment can only be called with :expr [...]" {:expr expr
                                                                    :env env
                                                                    :type type})))
@@ -313,17 +378,43 @@
     :VarRef [env expr]
     :Int [env expr]
     :String [env expr]
-    :FunDef 
-    (let [{:keys [expr env]} (check
-                              (assoc ctx :type (synth ctx)))]
-      [env expr])
-    :FunCall 
+    :FunDef
+    (let [fun-type (synth {:expr expr :env env})
+          [_ {:keys [fn-name args return-type]} & body] expr
+          _ (check {:expr expr :env env :type fun-type})
+          ;; Add function to environment
+          arg-types (mapv :type args)
+          env' (assoc env fn-name {:args arg-types :return-type return-type})]
+      [env' expr])
+    :FunCall
     (let [{:keys [expr env]}   (check
                                 (assoc ctx :type (synth ctx)))]
       [env expr])
-    (into [(first expr)]
-          (mapv (augment-sub-expr ctx)
-                (rest expr)))))
+    :CtorInteropCall
+    (let [ctor-type (synth {:expr expr :env env})]
+      (check {:expr expr :env env :type ctor-type})
+      [env expr])
+    :VarDef
+    (let [[_ {:keys [var-id var-type] :as metadata} init-expr] expr]
+      (if init-expr
+        ;; If there's an initializer, augment it, then add var to env
+        (let [[env' augmented-init] (augment (assoc ctx :expr init-expr))
+              env'' (assoc env' var-id var-type)]
+          [env'' [:VarDef metadata augmented-init]])
+        ;; No initializer, just add var to env
+        [(assoc env var-id var-type) expr]))
+    :InteropCall
+    (let [{:keys [expr env]}   (check
+                                (assoc ctx :type (synth ctx)))]
+      [env expr])
+    :StaticFieldAccess
+    (let [{:keys [expr env]}   (check
+                                (assoc ctx :type (synth ctx)))]
+      [env expr])
+    ;; Default case: reconstruct expression with augmented sub-expressions
+    [env (into [(first expr)]
+               (mapv (augment-sub-expr ctx)
+                     (rest expr)))]))
 
 
 

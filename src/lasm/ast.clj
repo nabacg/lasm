@@ -14,9 +14,9 @@
 
 
 (defmulti ast-to-ir (fn [expr _]
-                      (if (vector? expr) 
+                      (if (vector? expr)
                         (first expr)
-                        (errorf expr "invalid AST, probably failed parse"))))
+                        (errorf "invalid AST, probably failed parse: %s" expr))))
 
 (defn args-to-locals [args]
   (vec
@@ -142,9 +142,21 @@
 
 (defmethod ast-to-ir :CtorInteropCall [[_ {:keys [class-name]} & ctor-args] tenv]
   (let [[_ args-ir] (map-ast-to-ir tenv ctor-args)
-        {:keys [owner] :as ctor-props } (type-checker/make-asm-ctor tenv class-name ctor-args)]    
+        {:keys [owner] :as ctor-props } (type-checker/make-asm-ctor tenv class-name ctor-args)]
     [tenv (conj (into [[:new {:owner owner}]]
                       args-ir) [:invoke-constructor ctor-props])]))
+
+(defmethod ast-to-ir :StaticFieldAccess [[_ {:keys [class-name field-name]}] tenv]
+  ;; Special case: java.lang.Object/null is syntactic sugar for Java null
+  (if (and (= class-name "java.lang.Object") (= field-name "null"))
+    [tenv [[:aconst-null]]]
+    ;; General static field access
+    (let [field-type (type-checker/synth {:expr [:StaticFieldAccess {:class-name class-name
+                                                                      :field-name field-name}]
+                                          :env tenv})]
+      [tenv [[:get-static-field {:owner [:class class-name]
+                                 :name field-name
+                                 :result-type field-type}]]])))
 
 (defmethod ast-to-ir :FunCall [[_ fn-name & fn-args] tenv]
   (if-let [fn-type  (tenv fn-name)]
@@ -166,12 +178,42 @@
     (errorf "Unknown function signature for fn-name: %s" fn-name fn-args tenv)))
 
 
+(defn needs-pop? [ir-instruction]
+  "Check if an IR instruction leaves a non-void value on the stack"
+  (when (vector? ir-instruction)
+    (case (first ir-instruction)
+      :interop-call (let [[_ [_ _ return-type]] ir-instruction]
+                      (not= return-type :void))
+      :call-fn (let [[_ [_ _ return-type]] ir-instruction]
+                 (not= return-type :void))
+      :static-interop-call (let [[_ [_ _ return-type]] ir-instruction]
+                             (not= return-type :void))
+      false)))
+
+(defn add-pop-if-needed [ir-seq]
+  "Add POP instruction after IR that leaves unused values on stack"
+  (if (and (seq ir-seq)
+           (needs-pop? (last ir-seq)))
+    (conj ir-seq [:pop])
+    ir-seq))
+
 (defmethod ast-to-ir :FunDef [[_ {:keys [args return-type fn-name]} & body] tenv]
 ;;  (println [args return-type fn-name] body )
   (let [arg-types (mapv :type args)
         tenv'     (assoc tenv fn-name {:args arg-types :return-type return-type})
         tenv-with-params (into tenv' (map (juxt :id :type) args))
-        [tenv'' body-irs] (map-ast-to-ir tenv-with-params body)]
+        ;; Process each body expression separately to handle POPs
+        [tenv'' body-irs]
+        (reduce (fn [[env irs] [idx expr]]
+                  (let [[env' ir] (ast-to-ir expr env)
+                        ;; Add POP for non-last expressions that leave values
+                        is-last? (= idx (dec (count body)))
+                        ir-with-pop (if is-last?
+                                      ir  ;; Last expression is the return value
+                                      (vec (add-pop-if-needed ir)))]
+                    [env' (into irs ir-with-pop)]))
+                [tenv-with-params []]
+                (map-indexed vector body))]
     [tenv'
      [{:class-name fn-name
        :args arg-types
@@ -232,7 +274,7 @@
   (reduce (fn [[env checked-exprs] expr]
             (let [[env' checked] (type-checker/augment {:env env
                                                         :expr expr})]
-              [env' (into checked-exprs checked)]))
+              [env' (conj checked-exprs checked)]))
           [env []]
           exprs))
 
