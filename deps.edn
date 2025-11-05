@@ -1,5 +1,5 @@
 {:paths ["src"]
- :deps {#_#_org.clojure/clojure {:mvn/version "1.11"}
+ :deps {org.clojure/clojure {:mvn/version "1.11.1"}
         org.ow2.asm/asm {:mvn/version "8.0.1"}
         org.ow2.asm/asm-commons {:mvn/version "8.0.1"}
         com.clojure-goes-fast/clj-java-decompiler {:mvn/version "0.3.0"}
