@@ -24,56 +24,7 @@
       (is (not (insta/failure? result))
           "Parser should handle leading whitespace"))))
 
-(deftest test-simple-window-example
-  (testing "Simple window example should parse and compile"
-    (let [code (slurp "examples/01_simple_window.lasm")
-          parsed (p/parser code)]
-      (is (not (insta/failure? parsed))
-          "Simple window example should parse successfully")
-      (when-not (insta/failure? parsed)
-        (let [ast-tree (p/parse-tree-to-ast parsed)
-              program (ast/build-program ast-tree)]
-          (is (map? program) "Should build valid program")
-          (is (:entry-point program) "Should have entry point")
-          (is (vector? (:fns program)) "Should have functions"))))))
-
-(deftest test-window-with-label-example
-  (testing "Window with label example should parse and compile"
-    (let [code (slurp "examples/02_window_with_label.lasm")
-          parsed (p/parser code)]
-      (is (not (insta/failure? parsed))
-          "Window with label example should parse successfully")
-      (when-not (insta/failure? parsed)
-        (let [ast-tree (p/parse-tree-to-ast parsed)
-              program (ast/build-program ast-tree)]
-          (is (map? program) "Should build valid program")
-          (is (:entry-point program) "Should have entry point"))))))
-
-(deftest test-pong-example
-  (testing "Pong example should parse and compile"
-    (let [code (slurp "examples/03_pong.lasm")
-          parsed (p/parser code)]
-      (is (not (insta/failure? parsed))
-          "Pong example should parse successfully")
-      (when-not (insta/failure? parsed)
-        (let [ast-tree (p/parse-tree-to-ast parsed)
-              program (ast/build-program ast-tree)]
-          (is (map? program) "Should build valid program")
-          (is (:entry-point program) "Should have entry point")
-          (is (= "MakeFrame" (:entry-point program))
-              "Entry point should be MakeFrame"))))))
-
-(deftest test-pong-logic-example
-  (testing "Pong logic example should parse and compile"
-    (let [code (slurp "examples/04_pong_with_logic.lasm")
-          parsed (p/parser code)]
-      (is (not (insta/failure? parsed))
-          "Pong logic example should parse successfully")
-      (when-not (insta/failure? parsed)
-        (let [ast-tree (p/parse-tree-to-ast parsed)
-              program (ast/build-program ast-tree)]
-          (is (map? program) "Should build valid program")
-          (is (:entry-point program) "Should have entry point"))))))
+;; Example file tests removed - these will be in the examples PR stacked on top
 
 (deftest test-constructor-interop
   (testing "Constructor interop with 'new' keyword"
