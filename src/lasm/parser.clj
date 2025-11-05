@@ -7,7 +7,7 @@
   (insta/parser
 "
 Prog := wc TopLevelExpr (ws expr-delim+ ws TopLevelExpr)* wc
-<TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr | StaticFieldAccessExpr | CtorInteropExpr
+<TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr | StaticFieldAccessExpr | CtorInteropExpr | ProxyExpr
 <Expr> := TopLevelExpr | BoolExpr | StringExpr | NumExpr | VarExpr | IfExpr | BinOpExpr | EqOpExpr
 <expr-delim> := <';'> | newline
 <newline> := <'\n'>
@@ -36,7 +36,9 @@ FunCallExpr := symbol  <'('> comma-delimited-exprs? <')'>
 StaticInteropCallExpr := fullyQualifiedType<'/'>symbol <'('> comma-delimited-exprs? <')'>
 StaticFieldAccessExpr := fullyQualifiedType<'/'>symbol
 InteropCallExpr := ( StringExpr | VarExpr | FunCallExpr )<'.'>symbol<'('> comma-delimited-exprs? <')'>
-CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>"))
+CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
+ProxyExpr := <'proxy'> ws fullyQualifiedType ws <'{'> wc ProxyMethod+ wc <'}'>
+ProxyMethod := symbol ws <'('> ws params ws <')'> TypeAnnotation ws <'=>'> ws body"))
 
 
 
@@ -139,6 +141,19 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
   [:StaticFieldAccess
    {:class-name class-name
     :field-name field-name}])
+
+(defmethod trans-to-ast :ProxyMethod [[_ method-name params-node return-type body-node]]
+  (let [[_ & params] params-node
+        [_ & body] body-node]
+    {:method-name method-name
+     :args (mapv trans-param params)
+     :return-type (trans-type return-type)
+     :body (mapv trans-to-ast body)}))
+
+(defmethod trans-to-ast :ProxyExpr [[_ class-or-interface & methods]]
+  [:Proxy
+   {:class-or-interface class-or-interface
+    :methods (mapv trans-to-ast methods)}])
 
 (defn parse-tree-to-ast [[_ & exprs]]
   (mapv trans-to-ast exprs))

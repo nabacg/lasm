@@ -272,8 +272,14 @@
     :InteropCall (let [[_ {:keys [this-expr method-name]} & method-args] expr
                        method-return-type (synth ctx)]
                    (matches-type method-return-type ctx))
+    :StaticInteropCall (let [method-return-type (synth ctx)]
+                         (matches-type method-return-type ctx))
     :StaticFieldAccess (let [field-type (synth ctx)]
                          (matches-type field-type ctx))
+    :Proxy (let [[_ {:keys [class-or-interface]}] expr
+                 proxy-type [:class class-or-interface]]
+             ;; TODO: validate that all required methods are implemented
+             (matches-type proxy-type ctx))
     (throw (ex-info "No matching check" {:expr expr :type type}))))
 
 
@@ -328,11 +334,16 @@
                                         (ast-expr-to-ir-type [this-type] env))
                        method-sig (lookup-interop-method-signature class-name method-name method-args false env)]
                    (:return-type method-sig))
+    :StaticInteropCall (let [[_ {:keys [class-name method-name]} & method-args] expr
+                             method-sig (lookup-interop-method-signature class-name method-name method-args true env)]
+                         (:return-type method-sig))
     :StaticFieldAccess (let [[_ {:keys [class-name field-name]}] expr
                              clazz (Class/forName class-name)
                              field (.getDeclaredField clazz field-name)
                              field-type (.getType field)]
                          (jvm-type-to-ir field-type))
+    :Proxy (let [[_ {:keys [class-or-interface]}] expr]
+             [:class class-or-interface])
     (throw (ex-info "No Matching synth" {:expr expr :env env}))))
 
 ;; ctx -> expr
@@ -407,9 +418,17 @@
     (let [{:keys [expr env]}   (check
                                 (assoc ctx :type (synth ctx)))]
       [env expr])
+    :StaticInteropCall
+    (let [{:keys [expr env]}   (check
+                                (assoc ctx :type (synth ctx)))]
+      [env expr])
     :StaticFieldAccess
     (let [{:keys [expr env]}   (check
                                 (assoc ctx :type (synth ctx)))]
+      [env expr])
+    :Proxy
+    (let [proxy-type (synth {:expr expr :env env})]
+      (check {:expr expr :env env :type proxy-type})
       [env expr])
     ;; Default case: reconstruct expression with augmented sub-expressions
     [env (into [(first expr)]

@@ -6,9 +6,9 @@
          '[lasm.emit :as emit]
          '[instaparse.core :as insta])
 
-(println "Loading Pong example...")
+(println "Loading Animated Pong example...")
 
-(let [code (slurp "examples/03_pong.lasm")
+(let [code (slurp "examples/04_animated_pong.lasm")
       _ (println "\n=== CODE ===")
       _ (println code)
       _ (println "\n=== PARSING ===")

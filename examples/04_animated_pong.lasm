@@ -1,0 +1,25 @@
+fn main(): int => {
+  frame:javax.swing.JFrame = new javax.swing.JFrame("LASM PONG - Animated!")
+  panel:javax.swing.JPanel = new javax.swing.JPanel()
+  black:java.awt.Color = new java.awt.Color(0, 0, 0)
+  panel.setBackground(black)
+  ballLabel:javax.swing.JLabel = new javax.swing.JLabel("Starting...")
+  white:java.awt.Color = new java.awt.Color(255, 255, 255)
+  ballLabel.setForeground(white)
+  font:java.awt.Font = new java.awt.Font("Courier New", 1, 48)
+  ballLabel.setFont(font)
+  panel.add(ballLabel)
+  frame.add(panel)
+  d:java.awt.Dimension = new java.awt.Dimension(800, 600)
+  frame.setSize(d)
+  frame.setVisible(true)
+
+  listener:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
+    actionPerformed(e:java.awt.event.ActionEvent): void => ballLabel.setText("  PONG!  ")
+  }
+  timer:javax.swing.Timer = new javax.swing.Timer(500, listener)
+  timer.start()
+  42
+}
+
+printint(main())

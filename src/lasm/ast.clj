@@ -1,5 +1,6 @@
 (ns lasm.ast
-  (:require [lasm.type-checker :as type-checker]))
+  (:require [lasm.type-checker :as type-checker]
+            [clojure.string :as string]))
 
 
 (defn error [expr & [msg ]]
@@ -132,7 +133,11 @@
         arg-types (map #(type-checker/ast-expr-to-ir-type % tenv) method-args)
         jvm-type (type-checker/lookup-interop-method-signature class-name method-name arg-types static? tenv)
         [_ args-ir]      (map-ast-to-ir tenv (cons this-expr method-args))
-        ir-op :interop-call
+        ;; Check if target is an interface
+        is-interface? (try
+                        (.isInterface (Class/forName class-name))
+                        (catch Exception _ false))
+        ir-op (if is-interface? :invoke-interface :interop-call)
         {:keys [return-type args]}  (merge-with #(or %1 %2)   jvm-type env-type )]    
     (if  (or env-type jvm-type)
       [tenv
@@ -157,6 +162,70 @@
       [tenv [[:get-static-field {:owner [:class class-name]
                                  :name field-name
                                  :result-type field-type}]]])))
+
+(defn find-var-refs
+  "Recursively find all VarRef nodes in an expression"
+  [expr]
+  (cond
+    ;; If it's a VarRef, return its var-id
+    (and (vector? expr) (= :VarRef (first expr)))
+    #{(get-in expr [1 :var-id])}
+
+    ;; If it's a vector, recurse into all elements
+    (vector? expr)
+    (apply clojure.set/union (map find-var-refs expr))
+
+    ;; If it's a map, recurse into all values
+    (map? expr)
+    (apply clojure.set/union (map find-var-refs (vals expr)))
+
+    ;; If it's a seq, recurse into all elements
+    (seq? expr)
+    (apply clojure.set/union (map find-var-refs expr))
+
+    ;; Otherwise return empty set
+    :else #{}))
+
+(defn find-captured-vars
+  "Find variables referenced in proxy methods that aren't method parameters"
+  [methods outer-env]
+  (let [all-refs (apply clojure.set/union
+                       (for [{:keys [args body]} methods
+                             expr body]
+                         (find-var-refs expr)))
+        param-names (set (mapcat #(map :id (:args %)) methods))
+        ;; Captured vars are those in outer env but not in params
+        captured (clojure.set/difference all-refs param-names)]
+    (filter #(contains? outer-env %) captured)))
+
+(defmethod ast-to-ir :Proxy [[_ {:keys [class-or-interface methods]}] tenv]
+  ;; Generate a unique class name for the proxy
+  (let [proxy-class-name (str "Proxy$" (string/replace class-or-interface "." "_") "$" (gensym))
+        ;; Find captured variables
+        captured-vars (find-captured-vars methods tenv)
+        captured-types (mapv (fn [var-id] {:var-id var-id :var-type (tenv var-id)}) captured-vars)
+        ;; Convert proxy methods to IR format
+        proxy-methods (mapv (fn [{:keys [method-name args return-type body]}]
+                              (let [arg-types (mapv :type args)
+                                    tenv-with-params (into tenv (map (juxt :id :type) args))
+                                    ;; Process method body - similar to FunDef
+                                    [_ body-irs]
+                                    (reduce (fn [[env irs] [idx expr]]
+                                              (let [[env' ir] (ast-to-ir expr env)
+                                                    is-last? (= idx (dec (count body)))]
+                                                ;; Don't add POP for last expression (return value)
+                                                [env' (into irs ir)]))
+                                            [tenv-with-params []]
+                                            (map-indexed vector body))]
+                                {:method-name method-name
+                                 :args arg-types
+                                 :return-type return-type
+                                 :body (into (args-to-locals args) body-irs)}))
+                            methods)]
+    [tenv [[:proxy {:class-name proxy-class-name
+                    :interface class-or-interface
+                    :methods proxy-methods
+                    :captured captured-types}]]]))
 
 (defmethod ast-to-ir :FunCall [[_ fn-name & fn-args] tenv]
   (if-let [fn-type  (tenv fn-name)]
