@@ -44,7 +44,7 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
                     {:expr expr
                      :msg (apply format msg-args)})))
 
-(defn trans-type [[_ type-str]]
+#_(defn trans-type [[_ type-str]]
   ;; TODO for now this is good enough, but this needs to get smarter
   ;; once we want to support class names and java objects
   (cond
@@ -56,14 +56,14 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
 
 (defn trans-param [[_ arg-id type-expr]]
   {:id arg-id
-   :type (trans-type type-expr)})
+   :type type-expr})
 
 (defmulti  trans-to-ast (fn [expr]
                           (if (insta/failure? expr)
                             (error expr "invalid parse tree, probably failed parse")
                             (first expr))))
 
-(defmethod trans-to-ast :TypeExpr [type-expr] (trans-type type-expr))
+(defmethod trans-to-ast :TypeExpr [type-expr]  type-expr)
 
 (defmethod trans-to-ast :StringExpr [[_ str-val]] [:String str-val])
 
@@ -102,7 +102,7 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
   (into
    [:FunDef {:args (mapv trans-param params)
              :fn-name fn-name
-             :return-type (trans-type return-type)}]
+             :return-type  return-type}]
    (mapv trans-to-ast body)))
 
 (defmethod trans-to-ast :FunCallExpr [[_ fn-name & arg-exprs]]
@@ -155,14 +155,19 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
   (map #(fib/invoke %) (range 20))
 
 
+  ;; TODO start here
+  ;; it breaks with
+;;  Unhandled clojure.lang.ExceptionInfo
+;;  augment can only be called with :expr [...]
+
   (-> (parser "fn Fib(x:int): int =>
        if x <= 2
           1
        else
            Fib(x-1) + Fib(x-2)
        printint(Fib(4))")
-      parse-tree-to-ast  #_#_
-      ast/build-program
+      parse-tree-to-ast  
+      ast/build-program #_
       emitter/emit!)
 
 

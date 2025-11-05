@@ -192,7 +192,8 @@
           (matches-type falsy-type (assoc ctx :expr falsy)))
     
     :FunDef (let [[_ {:keys [args return-type]} & body] expr
-                  env' (into env (map (juxt :id :type) args)) ;; extend the env with params
+                  
+                  env' (into env (map (juxt :id :type) args)) ;; extend the env with params                  
                   tail-expr (last body)]
 
               ;;TODO check each expr in body, but that should happen in augment 
@@ -209,11 +210,35 @@
                              :expr tail-expr})
               (synth ctx)
               )
+    :FunCall (let [[_ fun-name & fun-args] expr]
+               (println "fun-name=" fun-name ", fun-args=" fun-args)
+               (if-let [f-ty (env fun-name) ]
+                 (let [{:keys [return-type args]} f-ty]
+                   
+                   (matches-type return-type ctx)
+                   (doseq [[expected-ty found-expr] (map vector args fun-args)]
+                     (matches-type expected-ty
+                                   {:type (synth (assoc ctx
+                                                        :expr found-expr
+                                                        :env env))
+                                    :expr found-expr
+                                    :env env})))
+                 (throw (ex-info (format "unknown function in FunCall expr: %s" fun-name)
+                                 {:fun-name fun-name
+                                  :expr expr
+                                  :env env})))
+               )
     (throw (ex-info "No matching check" {:expr expr :type type}))))
 
 
 ;; ctx -> type
 (defn synth [{:keys [expr env] :as ctx}]
+  
+  (if (not (vector? expr))    
+    (throw (ex-info "augment can only be called with :expr [...]" {:expr expr
+                                                                   :env env
+                                                                   :type type})))
+  
   (case (first expr)
     :Int :int
     :Bool :bool
@@ -236,19 +261,43 @@
                                 {:expr expr
                                  :env env}))))
     :FunDef (let [[_ {:keys [args return-type]} & _] expr]
-              [:fn (mapv :type args) return-type ])                                        
+              [:fn (mapv :type args) return-type ])
+    :FunCall (let [[_ fun-name & args] expr]
+               (if-let [ty (env fun-name)]
+                 (:return-type ty)
+                 (throw (ex-info (format "Undefined Function called found: %s" fun-name)
+                                 {:var-id (:var-id (second expr))
+                                  :expr expr
+                                  :env env}))))
     (throw (ex-info "No Matching synth" {:expr expr :env env}))))
 
 ;; ctx -> expr
 (defn augment-sub-expr [{:keys [env type expr] :as parent-ctx}]
   (fn [e]
     ;; first augment the sub-expr in the parent-ctx, but without parent :type
-    (let [res (augment (assoc (dissoc parent-ctx :type) :expr e))]
-      (check {:env env
-              :expr res  
-              :type (synth {:env env
-                            :expr res})})
-      res)))
+    (try 
+      (let [res (augment (assoc (dissoc parent-ctx :type) :expr e))]
+        (check {:env env
+                :expr res  
+                :type (synth {:env env
+                              :expr res})})
+        res)
+      (catch  clojure.lang.ExceptionInfo e
+        (throw (ex-info "augment-sub-expr Exception" {:parent-ctx parent-ctx
+                                                  :type type
+                                                  :expr expr
+                                                  :env env
+                                                      :original-exception (.data e)})))
+      (catch  Exception e
+        (throw e)))))
+
+
+;;TODO this is a mess, should really write down all Type checker types (map structure)
+;; and decide what each of below returns
+;; - synth
+;; - augment
+;; - check
+
 
 ;; ctx -> expr
 (defn augment [{:keys [env type expr] :as ctx}]
@@ -261,9 +310,17 @@
                                                                    :type type})))
 
   (case (first expr)
-    :VarRef expr
-    :Int expr
-    :String expr
+    :VarRef [env expr]
+    :Int [env expr]
+    :String [env expr]
+    :FunDef 
+    (let [{:keys [expr env]} (check
+                              (assoc ctx :type (synth ctx)))]
+      [env expr])
+    :FunCall 
+    (let [{:keys [expr env]}   (check
+                                (assoc ctx :type (synth ctx)))]
+      [env expr])
     (into [(first expr)]
           (mapv (augment-sub-expr ctx)
                 (rest expr)))))
@@ -406,3 +463,73 @@
    :members
    (filter (comp #{(symbol "concat")} :name)))
   )
+
+
+
+
+
+
+(defn matrix [x y]
+  (->> (range 1 (inc (* x y)))
+       (partition y)
+       (map vec)
+       (into [])))
+
+(defn inc-x [dims]
+  (map (fn [[x y]] [(inc x) y])
+       dims))
+
+(defn inc-y [dims]
+  (map (fn [[x y]] [x (inc y)])
+       dims))
+
+(defn path [direction x y]
+  (cond
+    (or (= x 0) (= y 0))     []
+    (and (= x y 1))     [[0 0]]
+    :else
+    (case direction
+      :right (concat
+              (mapv #(vector 0 %) (range 0  y))
+              (inc-x (path :down (dec x) y)))
+      :down (concat
+             (mapv #(vector % (dec y)) (range 0 x))
+             (path :left x (dec y)))
+      :left  (concat
+              (mapv #(vector (dec x) %) (reverse (range 0  y)))
+              (path :up (dec x) y))
+      :up (concat
+           (mapv #(vector % 0) (reverse (range 0 x)))
+           (inc-y (path :right x (dec y))))
+      )))
+
+(defn spiral [m]
+  (->> (path :right  (count m) (count (first m)))
+       (mapv #(get-in m %))))
+
+(comment 
+
+  (spiral (matrix 2 2))
+  ;; => [1 2 4 3]
+  (spiral (matrix 3 3))
+  ;; => [1 2 3 6 9 8 7 4 5]
+  (spiral (matrix 4 4))
+  ;; => [1 2 3 4 8 12 16 15 14 13 9 5 6 7 11 10]
+
+
+  (spiral (matrix 0 0));; => ;[]
+
+
+
+  (spiral (matrix 4 2))
+  ;; => [1 2 4 6 8 7 5 3]
+
+  (spiral (matrix 2 4))
+  ;; => [1 2 3 4 8 7 6 5]
+
+
+  (spiral (matrix 4 3));; => [1 2 3 6 9 12 11 10 7 4 5 8]
+
+
+  (/ 3900.0 40)
+  ) 

@@ -208,7 +208,7 @@
               [env' (into irs ir)]))
           [env []] exprs))
 
-(defn build-program [exprs]
+#_(defn build-program [exprs]
   (let [{:keys [FunDef] :as expr-by-type} (group-by first exprs)
         top-level-exprs    (mapcat identity (vals (dissoc expr-by-type :FunDef))) ;; take everything but :FunDef, to package it into Main
         [tenv fn-defs-ir]  (map-ast-to-ir (init-tenv) FunDef)
@@ -228,7 +228,7 @@
      :entry-point main-fn-name}))
 
 
-(defn type-check-exprs [{:keys [env]} exprs]
+(defn type-check-exprs [env exprs]
   (reduce (fn [[env checked-exprs] expr]
             (let [[env' checked] (type-checker/augment {:env env
                                                         :expr expr})]
@@ -236,11 +236,11 @@
           [env []]
           exprs))
 
-(defn build-program-with-type-check [exprs]
+(defn build-program [exprs]
   (let [{:keys [FunDef] :as expr-by-type} (group-by first exprs)
         top-level-exprs    (mapcat identity (vals (dissoc expr-by-type :FunDef))) ;; take everything but :FunDef, to package it into Main
         [tenv type-checked-exprs]  (type-check-exprs (init-tenv) FunDef)
-        [tenv fn-defs-ir]  (map-ast-to-ir (init-tenv) type-checked-exprs) ;; that map- that's a reduce!!
+        [tenv fn-defs-ir]  (map-ast-to-ir tenv type-checked-exprs) ;; that map- that's a reduce!!
         ;; TODO does this really need to be that complicated? we could probably return a {FnName -> Fn} map from above fn
         ;fn-defs-ir         (apply merge fn-defs-ir)
         main-fn-name       (name (gensym "Main_"))
