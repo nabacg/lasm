@@ -4,7 +4,8 @@
             [clojure.string :as string]
             [lasm.parser :as parser]
             [lasm.ast :as ast]
-            [lasm.emit :as emit])
+            [lasm.emit :as emit]
+            [instaparse.core :as insta])
   (:import [java.util.jar JarOutputStream JarEntry Manifest Attributes$Name]
            [java.io File FileOutputStream ByteArrayOutputStream]
            [org.objectweb.asm ClassWriter]))
@@ -30,7 +31,7 @@
   "Compile a lasm program and return a map of {class-name -> bytecode}"
   [lasm-code]
   (let [parsed (parser/parser lasm-code)
-        _ (when (parser/insta/failure? parsed)
+        _ (when (insta/failure? parsed)
             (throw (ex-info "Parse error" {:error (str parsed)})))
         ast-tree (parser/parse-tree-to-ast parsed)
         program (ast/build-program ast-tree)
