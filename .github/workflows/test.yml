@@ -67,8 +67,7 @@ jobs:
                                \"04_animated_pong.lasm\"
                                \"05_keyboard_test.lasm\"])
 
-        (println \"\n=== Testing Working Examples (should pass) ===\"
-)
+        (println \"\n=== Testing Working Examples (should pass) ===\")
         (doseq [filename working-examples]
           (println (str \"\\nTesting \" filename \"...\"))
           (let [file (clojure.java.io/file \"examples\" filename)
@@ -98,8 +97,7 @@ jobs:
                                \"08_pong_working.lasm\"
                                \"09_pong_simple.lasm\"])
 
-        (println \"\n=== Testing Invalid Examples (should correctly fail) ===\"
-)
+        (println \"\n=== Testing Invalid Examples (should correctly fail) ===\")
         (doseq [filename invalid-examples]
           (let [file (clojure.java.io/file \"examples\" filename)]
             (when (.exists file)
@@ -130,8 +128,7 @@ jobs:
              keyTyped(e:java.awt.event.KeyEvent): void => { printstr(\\\"typed\\\") }
            }\")
 
-        (println \"\n=== Testing Multi-Method Proxy (KeyListener) ===\"
-)
+        (println \"\n=== Testing Multi-Method Proxy (KeyListener) ===\")
         (let [parsed (p/parser keylistener-code)]
           (if (insta/failure? parsed)
             (do
@@ -153,8 +150,7 @@ jobs:
                  '[lasm.ast :as ast]
                  '[lasm.emit :as emit])
 
-        (println \"\n=== Testing End-to-End Compilation ===\"
-)
+        (println \"\n=== Testing End-to-End Compilation ===\")
 
         ;; Test factorial
         (let [fact-code \"fn fact(x:int): int =>
