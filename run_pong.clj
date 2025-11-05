@@ -1,14 +1,14 @@
 #!/usr/bin/env clojure
 
-;; Run the Pong example directly
+;; Run the FULL Pong game with all mechanics
 (require '[lasm.parser :as parser]
          '[lasm.ast :as ast]
          '[lasm.emit :as emit]
          '[instaparse.core :as insta])
 
-(println "Loading Animated Pong example...")
+(println "Loading FULL Pong game with physics, controls, and scoring...")
 
-(let [code (slurp "examples/04_animated_pong.lasm")
+(let [code (slurp "examples/06_pong_full_game.lasm")
       _ (println "\n=== CODE ===")
       _ (println code)
       _ (println "\n=== PARSING ===")
