@@ -46,7 +46,19 @@ jobs:
     - name: Run unit tests (clojure.test)
       run: |
         echo "Running clojure.test suite..."
-        clojure -M:tests
+        echo "Test files:"
+        find test -name "*.clj" -type f
+        echo ""
+        echo "Running tests with verbose output..."
+        clojure -M:tests 2>&1 || {
+          echo "❌ Tests failed with exit code $?"
+          echo "Attempting to run tests individually to identify failure..."
+          for ns in lasm.parser-test lasm.examples-test lasm.end-2-end-test; do
+            echo "Testing namespace: $ns"
+            clojure -M -e "(require 'clojure.test '$ns) (clojure.test/run-tests '$ns)" || echo "  ❌ $ns failed"
+          done
+          exit 1
+        }
 
     - name: Run comprehensive manual test suite
       run: |
