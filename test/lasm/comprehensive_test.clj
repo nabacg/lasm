@@ -10,8 +10,12 @@
 ;;; PARSER TESTS
 ;;; ==================================================================
 
-;; DISABLED: Standalone expressions are not TopLevelExpr in the grammar
-;; Only VarDefExpr, FunDefExpr, FunCallExpr, etc. are valid at top level
+;; DISABLED BY DESIGN: Standalone expressions are not TopLevelExpr in the grammar
+;; Design Decision (P3): LASM requires top-level code to have side effects or define things
+;; - Standalone values like "42", "hello", "true" have no side effects and unclear semantics
+;; - Use VarDefExpr instead: x:int = 42
+;; - Use function definitions for testable values: fn test(): int => 42
+;; Only VarDefExpr, FunDefExpr, FunCallExpr, InteropCallExpr, StaticInteropCallExpr, CtorInteropExpr are valid at top level
 #_(deftest test-basic-expressions
   (testing "Basic expression parsing"
     (are [code] (not (insta/failure? (p/parser code)))

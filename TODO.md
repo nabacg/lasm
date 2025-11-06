@@ -21,14 +21,18 @@ Priority tasks for improving the language, organized by theme. Each task should 
 - **Commit**: ad94e3a, 08fad46
 - **Status**: Parsing works, compilation not yet implemented
 
-### P3: Support Standalone Expressions at Top Level
-- [ ] Issue: Cannot parse `"42"` or `"hello"` as standalone programs
-- [ ] Task: Decide if standalone expressions should be valid TopLevelExpr
-- [ ] Options:
-  - A) Keep as-is (requires wrapping in function/var)
-  - B) Add standalone expr support to grammar
-- [ ] Test: Update `test-basic-expressions` based on decision
-- [ ] Verification: Document design decision
+### P3: Support Standalone Expressions at Top Level ✅ DECISION: KEEP AS-IS
+- [x] Issue: Cannot parse `"42"` or `"hello"` as standalone programs
+- [x] Task: Decided to keep current design
+- [x] Decision: **Option A - Keep as-is** (requires wrapping in function/var)
+- [x] Rationale:
+  - LASM is a compiled language, not a REPL
+  - Current design: top-level code has side effects or defines things
+  - Standalone expressions have unclear semantics (what happens to the value?)
+  - VarDefExpr already works for most use cases: `x:int = 42`
+  - For testing, wrap in function: `fn test(): int => 42`
+- [x] Test: Keep `test-basic-expressions` disabled with explanation
+- [x] Verification: Documented in TODO
 
 ## 🟡 MEDIUM PRIORITY - Type Checker Improvements
 
