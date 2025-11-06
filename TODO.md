@@ -144,14 +144,17 @@ Priority tasks for improving the language, organized by theme. Each task should 
 
 ## 📈 Current Stats (Updated: Session claude/review-lasm-code-011CUpXxyCnPkAQowgjSdJcv)
 
-- ✅ **27 tests enabled** (ast_test: 1, comprehensive_test: 14, end_2_end_test: 2, examples_test: 10)
-- ⚠️  **20 tests disabled** (waiting on fixes)
+- ✅ **32 tests enabled** (ast_test: 1, comprehensive_test: 19, end_2_end_test: 2, examples_test: 10)
+- ⚠️  **15 tests disabled** (waiting on fixes)
 - 🎯 **Target: 50+ tests passing**
+- 📊 **Progress**: 27 → 32 tests enabled (+5 tests re-enabled)
 - 📝 **Recent Progress**:
   - ✅ P1: Fixed static method parsing with negative numbers
   - ⚠️  P2: Added proxy parsing (compilation pending)
+  - ✅ P3: Documented design decision (keep standalone expressions disabled)
   - ✅ P4: Fixed recursive function support in type checker
   - ✅ P5: Fixed void return type handling (printstr/printint now return void)
+  - ✅ Re-enabled 5 tests that now pass after fixes
 
 ## How to Work on TODOs
 
