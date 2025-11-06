@@ -182,10 +182,10 @@
 
 (defn init-tenv []
   {"printstr"  {:args [[:class "java.lang.String"]]
-                :return-type [:class "java.lang.String"]
+                :return-type :void
                :special-form :print-str}
    "printint"  {:args [:int]
-                :return-type :int
+                :return-type :void
                 :special-form :print}})
 
 ;; AST-expr
