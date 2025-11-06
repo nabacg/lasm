@@ -191,19 +191,22 @@
           (matches-type truthy-type (assoc ctx :expr truthy))
           (matches-type falsy-type (assoc ctx :expr falsy)))
     
-    :FunDef (let [[_ {:keys [args return-type]} & body] expr
-                  
-                  env' (into env (map (juxt :id :type) args)) ;; extend the env with params                  
+    :FunDef (let [[_ {:keys [args return-type fn-name]} & body] expr
+                  ;; Add function to env first (for recursion support)
+                  env-with-fn (assoc env fn-name {:return-type return-type
+                                                    :args (mapv :type args)})
+                  ;; Then add parameters
+                  env' (into env-with-fn (map (juxt :id :type) args))
                   tail-expr (last body)]
 
-              ;;TODO check each expr in body, but that should happen in augment 
+              ;;TODO check each expr in body, but that should happen in augment
               #_(doseq [e body]
                   ;; soon enough would need to augment-then-synth for more complex op
                   (matches-type (synth (assoc ctx :expr e :env env'))
                                 (assoc ctx :expr e :env env')))
 
               (mapv (augment-sub-expr (assoc ctx :env env')) body)
-              
+
               (matches-type return-type
                             {:type (synth (assoc ctx :expr tail-expr))
                              :env env'

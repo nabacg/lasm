@@ -154,8 +154,7 @@
 ;;; END-TO-END COMPILATION TESTS
 ;;; ==================================================================
 
-;; DISABLED: Isolating type checker issues
-#_(deftest test-compile-and-run-simple-function
+(deftest test-compile-and-run-simple-function
   (testing "Compile and run simple function"
     (let [code "fn add(x:int, y:int): int => x + y\nadd(2, 3)"
           result (-> (p/parser code)
@@ -164,8 +163,7 @@
                     emit/emit-and-run!)]
       (is (= 5 result) "add(2, 3) should return 5"))))
 
-;; DISABLED: Type checker doesn't support recursive functions
-#_(deftest test-compile-and-run-factorial
+(deftest test-compile-and-run-factorial
   (testing "Compile and run factorial"
     (let [code "fn fact(x:int): int =>
                   if x <= 1
@@ -179,10 +177,7 @@
                     emit/emit-and-run!)]
       (is (= 120 result) "fact(5) should return 120"))))
 
-;; DISABLED: Type checker doesn't support recursive functions yet
-;; This test fails with "Undefined Function called found: fib" because
-;; the type checker doesn't have fib in the environment when checking the function body
-#_(deftest test-compile-and-run-fibonacci
+(deftest test-compile-and-run-fibonacci
   (testing "Compile and run fibonacci"
     (let [code "fn fib(x:int): int =>
                   if x < 2
