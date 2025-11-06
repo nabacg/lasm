@@ -8,7 +8,7 @@
 "
 Prog := wc TopLevelExpr (ws expr-delim+ ws TopLevelExpr)* wc
 <TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr | CtorInteropExpr
-<Expr> := TopLevelExpr | BoolExpr | StringExpr | NumExpr | VarExpr | IfExpr | BinOpExpr | EqOpExpr 
+<Expr> := TopLevelExpr | BoolExpr | StringExpr | NumExpr | VarExpr | IfExpr | BinOpExpr | EqOpExpr | ProxyExpr 
 <expr-delim> := <';'> | newline
 <newline> := <'\n'>
 <ws> := <' '>*
@@ -35,7 +35,10 @@ body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
 FunCallExpr := symbol  <'('> comma-delimited-exprs? <')'>
 StaticInteropCallExpr := fullyQualifiedType<'/'>symbol <'('> comma-delimited-exprs? <')'>
 InteropCallExpr := ( StringExpr | VarExpr | FunCallExpr )<'.'>symbol<'('> comma-delimited-exprs? <')'>
-CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>"))
+CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
+ProxyExpr := <'proxy'> ws fullyQualifiedType ws <'{'> wc ProxyMethod+ wc <'}'>
+ProxyMethod := symbol ws <'('> ws params ws <')'> TypeAnnotation ws <'=>'> ws proxy-body
+proxy-body := <'{'> wc Expr ws (expr-delim ws Expr)* wc <'}'>"))
 
 
 
@@ -131,6 +134,19 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
     {:class-name  class-name
      :method-name method-name}]
    (mapv trans-to-ast args)))
+
+(defmethod trans-to-ast :ProxyExpr [[_ interface-name & methods]]
+  (into
+   [:ProxyExpr
+    {:interface-name interface-name}]
+   (mapv trans-to-ast methods)))
+
+(defmethod trans-to-ast :ProxyMethod [[_ method-name [_ & params] return-type [_ & body]]]
+  [:ProxyMethod
+   {:method-name method-name
+    :params (mapv trans-param params)
+    :return-type return-type}
+   (mapv trans-to-ast body)])
 
 (defn parse-tree-to-ast [[_ & exprs]]
   (mapv trans-to-ast exprs))

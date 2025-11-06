@@ -55,17 +55,14 @@
       ;; Static field
       "pi:int = java.lang.Math/PI")))
 
-;; DISABLED: Parser failing - investigate proxy syntax issue
-#_(deftest test-proxy-simple
+(deftest test-proxy-simple
   (testing "Simple proxy with one method"
     (let [code "listener:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
                   actionPerformed(e:java.awt.event.ActionEvent): void => { printstr(\"clicked\") }
                 }"]
       (is (not (insta/failure? (p/parser code)))))))
 
-;; DISABLED: Parser failing on multi-method proxy
-;; TODO: Investigate why 3-method proxy fails when example 05 works
-#_(deftest test-proxy-multi-method
+(deftest test-proxy-multi-method
   (testing "Proxy with 3+ methods (KeyListener)"
     (let [code "listener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
                   keyPressed(e:java.awt.event.KeyEvent): void => { printstr(\"pressed\") }
@@ -303,8 +300,7 @@
 ;;; CLOSURE CAPTURE TESTS
 ;;; ==================================================================
 
-;; DISABLED: Parser failing - investigate proxy syntax issue
-#_(deftest test-proxy-closure-capture
+(deftest test-proxy-closure-capture
   (testing "Proxy methods should capture variables from outer scope"
     (let [code "fn test(): int => {
                   counter:java.lang.Object = createIntArray(1)
