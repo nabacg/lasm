@@ -103,22 +103,22 @@
       {:status :fail
        :error (str "Exception: " (.getMessage e))})))
 
-;; DISABLED: test-example-file uses ast/build-program which has type checker issues
-#_(deftest test-example-01-simple-window
+;; Re-enabled after fixing recursive functions (P4) and void returns (P5)
+(deftest test-example-01-simple-window
   (testing "Example 01: Simple Window"
     (let [result (test-example-file "examples/01_simple_window.lasm")]
       (is (= :pass (:status result))
           (str "Example 01 should parse and build: " (:error result))))))
 
-;; DISABLED: test-example-file uses ast/build-program which has type checker issues
-#_(deftest test-example-02-window-with-label
+;; Re-enabled after fixing recursive functions (P4) and void returns (P5)
+(deftest test-example-02-window-with-label
   (testing "Example 02: Window with Label"
     (let [result (test-example-file "examples/02_window_with_label.lasm")]
       (is (= :pass (:status result))
           (str "Example 02 should parse and build: " (:error result))))))
 
-;; DISABLED: test-example-file uses ast/build-program which has type checker issues
-#_(deftest test-example-03-pong
+;; Re-enabled after fixing recursive functions (P4) and void returns (P5)
+(deftest test-example-03-pong
   (testing "Example 03: Basic Pong"
     (let [result (test-example-file "examples/03_pong.lasm")]
       (is (= :pass (:status result))
@@ -200,8 +200,8 @@
                     emit/emit-and-run!)]
       (is (= 89 result) "fib(10) should return 89"))))
 
-;; DISABLED: Isolating type checker issues
-#_(deftest test-string-operations
+;; Re-enabled after fixing recursive functions (P4) and void returns (P5)
+(deftest test-string-operations
   (testing "String operations via Java interop"
     (let [code "fn test(): string => {
                   s:string = \"hello\"
@@ -214,8 +214,8 @@
                     emit/emit-and-run!)]
       (is (= "HELLO" result) "String toUpperCase should work"))))
 
-;; DISABLED: Isolating type checker issues
-#_(deftest test-math-static-methods
+;; Re-enabled after fixing negative number and static method parsing in P1
+(deftest test-math-static-methods
   (testing "Math static methods"
     (let [code "java.lang.Math/abs(-42)"
           result (-> (p/parser code)
