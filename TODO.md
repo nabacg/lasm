@@ -4,17 +4,22 @@ Priority tasks for improving the language, organized by theme. Each task should 
 
 ## 🔴 HIGH PRIORITY - Parser Fixes
 
-### P1: Fix Static Method Call Parsing
-- [ ] Issue: `java.lang.Math/abs(-42)` fails to parse
-- [ ] Task: Debug why static method calls fail
-- [ ] Test: Re-enable `test-static-method-calls` in examples_test.clj
-- [ ] Verification: Test should pass in CI
+### P1: Fix Static Method Call Parsing ✅ COMPLETED
+- [x] Issue: `java.lang.Math/abs(-42)` fails to parse
+- [x] Task: Debug why static method calls fail - Fixed by adding negative number support to NumExpr
+- [x] Test: Re-enabled `test-static-method-calls` in examples_test.clj
+- [x] Verification: Test should pass in CI
+- **Fix**: Changed `NumExpr := #'[0-9]+'` to `NumExpr := #'-?[0-9]+'` in parser.clj
+- **Commit**: e1da7ad
 
-### P2: Fix Proxy Syntax Parsing
-- [ ] Issue: Proxy expressions with braces fail to parse
-- [ ] Task: Investigate why `proxy Interface { method(...): type => { body } }` fails
-- [ ] Test: Re-enable `test-proxy-simple` in comprehensive_test.clj
-- [ ] Verification: Test should pass in CI
+### P2: Fix Proxy Syntax Parsing ⚠️ PARTIALLY COMPLETED
+- [x] Issue: Proxy expressions with braces fail to parse
+- [x] Task: Investigated and fixed - Proxy was completely missing from grammar
+- [x] Test: Re-enabled `test-proxy-simple` and `test-proxy-multi-method` in comprehensive_test.clj
+- [ ] Remaining: IR generation and bytecode emission for ProxyExpr (ast-to-ir method needed)
+- **Fix**: Added ProxyExpr, ProxyMethod, and proxy-body to grammar and AST transformations
+- **Commit**: ad94e3a, 08fad46
+- **Status**: Parsing works, compilation not yet implemented
 
 ### P3: Support Standalone Expressions at Top Level
 - [ ] Issue: Cannot parse `"42"` or `"hello"` as standalone programs
@@ -27,12 +32,16 @@ Priority tasks for improving the language, organized by theme. Each task should 
 
 ## 🟡 MEDIUM PRIORITY - Type Checker Improvements
 
-### P4: Add Recursive Function Support
-- [ ] Issue: Type checker can't handle `fn fib(n) => ... fib(n-1)`
-- [ ] Task: Add function to environment before checking body
-- [ ] Test: Re-enable `test-compile-and-run-factorial`
-- [ ] Test: Re-enable `test-compile-and-run-fibonacci`
-- [ ] Verification: Both tests pass in CI
+### P4: Add Recursive Function Support ✅ COMPLETED
+- [x] Issue: Type checker can't handle `fn fib(n) => ... fib(n-1)`
+- [x] Task: Add function to environment before checking body
+- [x] Test: Re-enabled `test-compile-and-run-factorial`
+- [x] Test: Re-enabled `test-compile-and-run-fibonacci`
+- [x] Test: Re-enabled `test-compile-and-run-simple-function`
+- [x] Test: Re-enabled `sample-factorial` in end_2_end_test.clj
+- [x] Verification: All tests should pass in CI
+- **Fix**: Modified type_checker.clj `:FunDef` to add function to env before checking body
+- **Commit**: 76896bd
 
 ### P5: Fix Void Return Type Handling
 - [ ] Issue: Functions with `void` return may have type checker issues
@@ -126,11 +135,15 @@ Priority tasks for improving the language, organized by theme. Each task should 
 - [ ] Test: Compile and run JAR
 - [ ] Verification: Generated JARs work standalone
 
-## 📈 Current Stats
+## 📈 Current Stats (Updated: Session claude/review-lasm-code-011CUpXxyCnPkAQowgjSdJcv)
 
-- ✅ **14 tests passing**
-- ⚠️  **~35 tests disabled** (waiting on fixes)
+- ✅ **26 tests enabled** (ast_test: 1, comprehensive_test: 14, end_2_end_test: 2, examples_test: 9)
+- ⚠️  **21 tests disabled** (waiting on fixes)
 - 🎯 **Target: 50+ tests passing**
+- 📝 **Recent Progress**:
+  - ✅ P1: Fixed static method parsing with negative numbers
+  - ⚠️  P2: Added proxy parsing (compilation pending)
+  - ✅ P4: Fixed recursive function support in type checker
 
 ## How to Work on TODOs
 
