@@ -55,22 +55,27 @@
       ;; Static field
       "pi:int = java.lang.Math/PI")))
 
+;; NOTE: Proxy parsing works, but IR generation/compilation not yet implemented
+;; These tests verify parsing only. Full proxy support requires:
+;; - ast-to-ir method for ProxyExpr in ast.clj
+;; - Bytecode emission for anonymous classes in emit.clj
+;; - Closure capture support
 (deftest test-proxy-simple
-  (testing "Simple proxy with one method"
+  (testing "Simple proxy with one method - parsing only"
     (let [code "listener:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
                   actionPerformed(e:java.awt.event.ActionEvent): void => { printstr(\"clicked\") }
                 }"]
       (is (not (insta/failure? (p/parser code)))))))
 
 (deftest test-proxy-multi-method
-  (testing "Proxy with 3+ methods (KeyListener)"
+  (testing "Proxy with 3+ methods (KeyListener) - parsing only"
     (let [code "listener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
                   keyPressed(e:java.awt.event.KeyEvent): void => { printstr(\"pressed\") }
                   keyReleased(e:java.awt.event.KeyEvent): void => { printstr(\"released\") }
                   keyTyped(e:java.awt.event.KeyEvent): void => { printstr(\"typed\") }
                 }"]
       (is (not (insta/failure? (p/parser code)))
-          "3-method proxy should parse correctly after parser fix"))))
+          "3-method proxy should parse correctly"))))
 
 ;;; ==================================================================
 ;;; EXAMPLES TESTS
@@ -295,8 +300,9 @@
 ;;; CLOSURE CAPTURE TESTS
 ;;; ==================================================================
 
+;; NOTE: Proxy parsing works, but IR generation/compilation not yet implemented
 (deftest test-proxy-closure-capture
-  (testing "Proxy methods should capture variables from outer scope"
+  (testing "Proxy methods should capture variables from outer scope - parsing only"
     (let [code "fn test(): int => {
                   counter:java.lang.Object = createIntArray(1)
                   listener:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
@@ -306,7 +312,7 @@
                   }
                   42
                 }"]
-      ;; This test just checks parsing - actual closure capture requires running
+      ;; This test just checks parsing - actual closure capture requires IR/bytecode impl
       (is (not (insta/failure? (p/parser code)))
           "Proxy with closure capture should parse"))))
 
