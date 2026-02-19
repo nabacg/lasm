@@ -143,38 +143,36 @@ fn addGlider(grid: java.lang.Object, startRow: int, startCol: int, cols: int): v
   setArrayElement(grid, i5, 1)
 }
 
-fn renderRow(grid: java.lang.Object, rowStart: int, col: int, cols: int, acc: string): string => {
-  if col < cols {
-    idx:int = rowStart + col
-    cell:int = getArrayElement(grid, idx)
-    nextCol:int = col + 1
-    if cell == 1 {
-      newAcc:string = acc.concat("##")
-      renderRow(grid, rowStart, nextCol, cols, newAcc)
-    } else {
-      newAcc:string = acc.concat("  ")
-      renderRow(grid, rowStart, nextCol, cols, newAcc)
-    }
-  } else
-    acc
-}
+fn renderCell(gfx: java.awt.Graphics2D, grid: java.lang.Object, i: int, total: int, cols: int, cellSize: int, aliveColor: java.awt.Color, deadColor: java.awt.Color): void => {
+  if i < total {
+    row:int = i / cols
+    rc:int = row * cols
+    col:int = i - rc
+    alive:int = getArrayElement(grid, i)
+    x:int = col * cellSize
+    y:int = row * cellSize
+    cs:int = cellSize - 1
 
-fn renderGrid(grid: java.lang.Object, row: int, rows: int, cols: int, acc: string): string => {
-  if row < rows {
-    rowStart:int = row * cols
-    rowStr:string = renderRow(grid, rowStart, 0, cols, "")
-    accRow:string = acc.concat(rowStr)
-    withNewline:string = accRow.concat("\n")
-    nextRow:int = row + 1
-    renderGrid(grid, nextRow, rows, cols, withNewline)
-  } else
-    acc
+    if alive == 1 {
+      gfx.setColor(aliveColor)
+    } else {
+      gfx.setColor(deadColor)
+    }
+    gfx.fillRect(x, y, cs, cs)
+
+    nextI:int = i + 1
+    renderCell(gfx, grid, nextI, total, cols, cellSize, aliveColor, deadColor)
+  } else {
+    setArrayElement(grid, 0, getArrayElement(grid, 0))
+  }
 }
 
 fn main(): int => {
-  rows:int = 25
-  cols:int = 25
-  total:int = 625
+  sizeStr:string = javax.swing.JOptionPane/showInputDialog("Enter grid size (10-50):")
+  rows:int = java.lang.Integer/parseInt(sizeStr)
+  cols:int = rows
+  total:int = rows * cols
+  cellSize:int = 16
 
   current:java.lang.Object = createIntArray(total)
   next:java.lang.Object = createIntArray(total)
@@ -187,24 +185,26 @@ fn main(): int => {
   rng:java.util.Random = new java.util.Random()
   randomizeGrid(current, rng, 0, total)
 
+  controlsMsg:string = "Controls:\n\n  SPACE = Pause / Resume\n  R = Randomize grid\n  C = Clear grid\n  G = Add glider pattern\n\nPress OK to start."
+  javax.swing.JOptionPane/showMessageDialog(java.lang.Object/null, controlsMsg)
+
+  imgW:int = cols * cellSize
+  imgH:int = rows * cellSize
+  img:java.awt.image.BufferedImage = new java.awt.image.BufferedImage(imgW, imgH, 1)
+  gfx:java.awt.Graphics2D = img.createGraphics()
+
+  aliveColor:java.awt.Color = new java.awt.Color(0, 200, 0)
+  deadColor:java.awt.Color = new java.awt.Color(40, 40, 40)
+
+  renderCell(gfx, current, 0, total, cols, cellSize, aliveColor, deadColor)
+
+  icon:javax.swing.ImageIcon = new javax.swing.ImageIcon(img)
+  label:javax.swing.JLabel = new javax.swing.JLabel(icon)
+
   frame:javax.swing.JFrame = new javax.swing.JFrame("LASM - Game of Life")
-  black:java.awt.Color = new java.awt.Color(0, 0, 0)
-  green:java.awt.Color = new java.awt.Color(0, 200, 0)
-
-  textArea:javax.swing.JTextArea = new javax.swing.JTextArea(25, 50)
-  monoFont:java.awt.Font = new java.awt.Font("Monospaced", 1, 14)
-  textArea.setFont(monoFont)
-  textArea.setEditable(false)
-  textArea.setFocusable(false)
-  textArea.setBackground(black)
-  textArea.setForeground(green)
-
-  gridStr:string = renderGrid(current, 0, rows, cols, "")
-  textArea.setText(gridStr)
-
-  frame.add(textArea)
-  d:java.awt.Dimension = new java.awt.Dimension(460, 430)
-  frame.setSize(d)
+  frame.add(label)
+  frame.pack()
+  frame.setResizable(false)
   frame.setDefaultCloseOperation(3)
 
   keyListener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
@@ -255,30 +255,28 @@ fn main(): int => {
         stepCell(current, next, 0, total, rows, cols)
         copyGrid(next, current, 0, total)
         gen:int = getArrayElement(genCount, 0)
-        newGen:int = gen + 1
-        setArrayElement(genCount, 0, newGen)
+        genPlus:int = gen + 1
+        setArrayElement(genCount, 0, genPlus)
       } else {
         setArrayElement(pauseFlag, 0, getArrayElement(pauseFlag, 0))
       }
 
-      gridStr:string = renderGrid(current, 0, rows, cols, "")
-      textArea.setText(gridStr)
+      renderCell(gfx, current, 0, total, cols, cellSize, aliveColor, deadColor)
+      label.repaint()
 
       g:int = getArrayElement(genCount, 0)
       genStr:string = java.lang.String/valueOf(g)
       titleBase:string = "Game of Life  Gen: "
-      newTitle:string = titleBase.concat(genStr)
-      frame.setTitle(newTitle)
+      titleStr:string = titleBase.concat(genStr)
+      frame.setTitle(titleStr)
     }
   }
 
-  timerObj:javax.swing.Timer = new javax.swing.Timer(150, timerListener)
+  timerObj:javax.swing.Timer = new javax.swing.Timer(100, timerListener)
   timerObj.start()
 
   frame.setVisible(true)
   frame.requestFocus()
-  printstr("LASM - Game of Life")
-  printstr("Controls: SPACE=pause  R=randomize  C=clear  G=add glider")
   42
 }
 

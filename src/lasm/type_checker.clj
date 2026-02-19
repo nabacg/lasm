@@ -53,10 +53,9 @@
     :class expr))
 
 (defn get-class-ancestors [klass]
-  ;; keeps calling `klass`'s getSuperclass until we get all the way to java.lang.Object
-  ;; needed because it turns out just passing `true` to (reflect/reflect klass :ancestors `true`)
-  ;; doesn't really do anything, one needs to pass a list of ancestor classes
-  (take-while #(not= % Object) (iterate #(.getSuperclass %) klass)))
+  ;; keeps calling `klass`'s getSuperclass until we hit null
+  ;; includes Object itself so that any class conforms to Object parameters
+  (take-while some? (iterate #(.getSuperclass %) klass)))
 
 
 (def ^:private primitive-types #{'int 'long 'boolean 'byte 'short 'char 'float 'double})
@@ -87,9 +86,9 @@
         (let [[_ class-name] arg-type
               java-class (Class/forName class-name)]
           (or (= class-name (name param-class))
-              (contains?
-               (into #{} (map #(.getName %)  (get-class-ancestors java-class)))
-               (name param-class))))
+              (try
+                (.isAssignableFrom (Class/forName (name param-class)) java-class)
+                (catch Exception _ false))))
         (= (name param-class) (name arg-type))
         true))))
 
@@ -175,9 +174,25 @@
 (defn make-asm-type [class-name]
   (Type/getType (Class/forName class-name)))
 
+(defn resolve-ctor-param-types [class-name ctor-arg-exprs tenv]
+  (let [clazz (Class/forName class-name)
+        ctors (.getConstructors clazz)
+        matching (filter (fn [ctor]
+                           (let [param-types (.getParameterTypes ctor)]
+                             (and (= (count param-types) (count ctor-arg-exprs))
+                                  (every? true?
+                                          (map (fn [param-class arg-expr]
+                                                 (can-conform-types? (symbol (.getName param-class)) arg-expr tenv))
+                                               param-types
+                                               ctor-arg-exprs)))))
+                         ctors)]
+    (if (= (count matching) 1)
+      (mapv #(jvm-type-to-ir %) (.getParameterTypes (first matching)))
+      (mapv (fn [a] (synth {:expr a :env tenv})) ctor-arg-exprs))))
+
 (defn make-asm-ctor [tenv class-name ctor-args]
   (let [class-type (make-asm-type class-name)
-        arg-types (map (fn [a] (synth {:expr a :env tenv})) ctor-args)
+        arg-types (resolve-ctor-param-types class-name ctor-args tenv)
         method (create-ctor-method {:arg-types arg-types})]
     {:method method
      :owner class-type}))

@@ -72,7 +72,12 @@ ProxyMethod := symbol ws <'('> ws params ws <')'> TypeAnnotation ws <'=>'> ws pr
 
 (defmethod trans-to-ast :TypeExpr [type-expr]  (trans-type type-expr))
 
-(defmethod trans-to-ast :StringExpr [[_ str-val]] [:String str-val])
+(defmethod trans-to-ast :StringExpr [[_ str-val]]
+  [:String (-> str-val
+               (string/replace "\\\\", "\u0000")
+               (string/replace "\\n" "\n")
+               (string/replace "\\t" "\t")
+               (string/replace "\u0000" "\\"))])
 
 (defmethod trans-to-ast :NumExpr [[_ num-val]] [:Int (Integer/parseInt num-val)])
 
