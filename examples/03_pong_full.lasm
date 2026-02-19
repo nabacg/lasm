@@ -1,0 +1,64 @@
+fn createGameFrame(): javax.swing.JFrame => {
+    frame:javax.swing.JFrame = new javax.swing.JFrame("Lasm Pong Game")
+    frame.setSize(800, 600)
+    frame.setDefaultCloseOperation(3)
+    frame.setResizable(false)
+    frame
+}
+
+fn createPanel(): javax.swing.JPanel => {
+    panel:javax.swing.JPanel = new javax.swing.JPanel()
+    black:java.awt.Color = new java.awt.Color(0, 0, 0)
+    panel.setBackground(black)
+    panel
+}
+
+fn createLabel(text: string): javax.swing.JLabel => {
+    label:javax.swing.JLabel = new javax.swing.JLabel(text)
+    white:java.awt.Color = new java.awt.Color(255, 255, 255)
+    label.setForeground(white)
+    font:java.awt.Font = new java.awt.Font("Arial", 1, 24)
+    label.setFont(font)
+    label
+}
+
+fn initializeGame(): string => {
+    frame:javax.swing.JFrame = createGameFrame()
+    panel:javax.swing.JPanel = createPanel()
+
+    titleLabel:javax.swing.JLabel = createLabel("PONG - A Lasm Demo")
+    instructionsLabel:javax.swing.JLabel = createLabel("Classic Pong Game")
+    creditsLabel:javax.swing.JLabel = createLabel("Built with Lasm Language")
+
+    panel.add(titleLabel)
+    panel.add(instructionsLabel)
+    panel.add(creditsLabel)
+
+    container:java.awt.Container = frame.getContentPane()
+    container.add(panel)
+
+    frame.setVisible(true)
+    frame.toFront()
+    frame.repaint()
+
+    printstr("Pong game initialized!")
+}
+
+fn main(): string => {
+    printstr("=================================")
+    printstr("  Lasm Pong Game Demo")
+    printstr("=================================")
+    printstr("")
+    printstr("Initializing game...")
+    initializeGame()
+    printstr("Game window created!")
+    printstr("This demo shows:")
+    printstr("- Object creation with 'new' keyword")
+    printstr("- Java interop (Swing components)")
+    printstr("- Function definitions and calls")
+    printstr("- Type annotations")
+    printstr("")
+    printstr("Press Ctrl+C in terminal to exit.")
+}
+
+main()

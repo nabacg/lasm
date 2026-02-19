@@ -1,0 +1,5 @@
+frame:javax.swing.JFrame = new javax.swing.JFrame("Hello from Lasm!")
+frame.setSize(400, 300)
+frame.setDefaultCloseOperation(3)
+frame.setVisible(true)
+printstr("Window created successfully!")

@@ -1,0 +1,28 @@
+#!/bin/bash
+# Lasm Compiler - Compile .lasm files to standalone JAR files
+#
+# Usage:
+#   lasmc input.lasm              # Creates input.jar
+#   lasmc input.lasm -o out.jar   # Creates out.jar
+
+set -e
+
+if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    echo "Usage: lasmc <input.lasm> [-o output.jar]"
+    echo ""
+    echo "Examples:"
+    echo "  lasmc examples/03_pong.lasm"
+    echo "  lasmc examples/03_pong.lasm -o pong.jar"
+    exit 0
+fi
+
+INPUT="$1"
+shift
+
+if [ ! -f "$INPUT" ]; then
+    echo "Error: File not found: $INPUT" >&2
+    exit 1
+fi
+
+# Pass remaining args (-o output.jar) through
+clj -M -m lasm.cli compile "$INPUT" "$@"

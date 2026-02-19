@@ -10,6 +10,9 @@
 
 (def INIT (Method/getMethod "void <init>()"))
 
+;; Accumulates proxy class bytecodes during compilation (for JAR packaging)
+(def ^:dynamic *proxy-bytecodes* nil)
+
 (defn resolve-type [expr-type]
   (cond
     (= Type (type expr-type))  ;;if expr is already of asm.Type
@@ -76,6 +79,8 @@
     (.invokeVirtual ga  out-stream-type
                     (build-method "println" :void args))))
 
+;; Forward declarations
+(declare make-proxy)
 
 (defn emit-instr! [^GeneratorAdapter ga [cmd-type cmd]]
   (case cmd-type
@@ -109,7 +114,8 @@
     :invoke-virtual
     (.invokeVirtual ga (resolve-type (:owner cmd)) (:method cmd))
     :invoke-interface
-    (.invokeInterface ga (resolve-type (:owner cmd))  (:method cmd))
+    (let [{:keys [owner method]} (build-invoke-props cmd)]
+      (.invokeInterface ga (resolve-type owner) method))
     :invoke-constructor
     (.invokeConstructor ga (resolve-type (:owner cmd)) (:method cmd))
     :new
@@ -127,6 +133,8 @@
     (.push ga (int (:value cmd)))
     :string
     (.push ga ^String (:value cmd))
+    :aconst-null
+    (.visitInsn ga Opcodes/ACONST_NULL)
     :put-field
     (.putField ga (:owner cmd) (:name cmd) (resolve-type (:field-type cmd)))
     :dup
@@ -146,13 +154,28 @@
 
 (defn emit-with-env [^GeneratorAdapter ga env [cmd-type cmd :as c]]
   (case cmd-type
-    :def-local (let [{:keys [value var-type var-id]} cmd
-                     var-handle (.newLocal ga (resolve-type var-type))]
-                 (.storeLocal ga var-handle)
-                 (assoc env var-id var-handle))
-    :ref-local (let [var-handle (env (:var-id cmd))]
-                 (.loadLocal ga var-handle)
-                 env)
+    :def-local (let [{:keys [var-type var-id]} cmd
+                     existing-handle (get env var-id)]
+                 (if (and existing-handle (number? existing-handle))
+                   ;; Reassignment - reuse existing local variable slot
+                   (do (.storeLocal ga existing-handle)
+                       env)
+                   ;; New variable - allocate new local slot
+                   (let [var-handle (.newLocal ga (resolve-type var-type))]
+                     (.storeLocal ga var-handle)
+                     (assoc env var-id var-handle))))
+    :ref-local (let [var-id (:var-id cmd)
+                     var-info (env var-id)]
+                 (if (and (map? var-info) (:field var-info))
+                   ;; Load from field
+                   (let [{:keys [type class-name]} var-info]
+                     (.loadThis ga)
+                     (.getField ga (Type/getObjectType class-name) var-id (resolve-type type))
+                     env)
+                   ;; Load from local variable
+                   (do
+                     (.loadLocal ga var-info)
+                     env)))
     :label     (if-let [label (get env (:value cmd))]
                  (do
                    (.mark ga label)
@@ -174,6 +197,33 @@
                 (let [label (.newLabel ga)]
                   (.goTo ga label)
                   (assoc env (:value cmd) label)))
+    :proxy
+    ;; For proxy, we need to:
+    ;; 1. Create and define the proxy class with captured variables
+    ;; 2. Instantiate it, passing captured values to constructor
+    ;; 3. Leave the instance on the stack
+    (let [{:keys [class-name interface methods captured]} cmd
+          proxy-class (make-proxy class-name interface methods (or captured []))
+          ;; Use Type/getObjectType for internal class name
+          proxy-type (Type/getObjectType class-name)
+          ctor-param-types (mapv (comp resolve-type :var-type) (or captured []))
+          ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type ctor-param-types))]
+      ;; NEW the proxy class
+      (.newInstance ga proxy-type)
+      (.dup ga)
+      ;; Load captured variable values onto the stack
+      (doseq [{:keys [var-id var-type]} (or captured [])]
+        (let [var-info (env var-id)]
+          (if (and (map? var-info) (:field var-info))
+            ;; If it's a field (nested closure), load from field
+            (let [{:keys [type class-name]} var-info]
+              (.loadThis ga)
+              (.getField ga (Type/getObjectType class-name) var-id (resolve-type type)))
+            ;; Otherwise load from local
+            (.loadLocal ga var-info))))
+      ;; Invoke the constructor with captured values
+      (.invokeConstructor ga proxy-type ctor-method)
+      env)
     (do
       (emit-instr! ga c)
       env)))
@@ -199,30 +249,128 @@
     (reduce (fn [env line] (emit-with-env  ga env line)) {} body)
     (.endMethod ^GeneratorAdapter ga)))
 
+(defn make-instance-method [^ClassWriter writer method-name {:keys [args return-type body captured class-name] :as method-description}]
+  (let [method (Method. method-name (resolve-type return-type)
+                        (into-array Type (map (comp resolve-type) args)))
+        ;; Instance method, no STATIC flag
+        ga     (GeneratorAdapter. Opcodes/ACC_PUBLIC method nil nil writer)
+        ;; Create initial env with captured variables marked as fields
+        captured-map (into {} (map (fn [{:keys [var-id var-type]}]
+                                     [var-id {:field true
+                                              :type var-type
+                                              :class-name class-name}])
+                                  (or captured [])))
+        ;; Add RETURN if not already present
+        body-with-return (if (= :return (first (last body)))
+                          body
+                          (conj body [:return]))]
+    (reduce (fn [env line] (emit-with-env ga env line)) captured-map body-with-return)
+    (.endMethod ^GeneratorAdapter ga)))
+
+(defn make-proxy [class-name interface methods captured-vars]
+  (let [writer (ClassWriter. ClassWriter/COMPUTE_FRAMES)
+        interface-internal (string/replace interface "." "/")]
+    (println "make-proxy class=" class-name " interface=" interface " methods=" (count methods) " captured=" (count captured-vars))
+    ;; Visit class, implementing the interface
+    (.visit writer Opcodes/V1_8 Opcodes/ACC_PUBLIC
+            class-name nil "java/lang/Object"
+            (into-array String [interface-internal]))
+
+    ;; Generate fields for captured variables
+    (doseq [{:keys [var-id var-type]} captured-vars]
+      (let [field-type (resolve-type var-type)]
+        (println "  Creating field:" var-id " type=" var-type)
+        (.visitField writer Opcodes/ACC_PRIVATE var-id
+                    (.getDescriptor field-type) nil nil)))
+
+    ;; Generate constructor that accepts captured values
+    (let [ctor-param-types (mapv (comp resolve-type :var-type) captured-vars)
+          ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type ctor-param-types))
+          ctor-gen (GeneratorAdapter. Opcodes/ACC_PUBLIC ctor-method nil nil writer)]
+      ;; Call super constructor
+      (.loadThis ctor-gen)
+      (.invokeConstructor ctor-gen (Type/getObjectType "java/lang/Object") INIT)
+      ;; Store each captured variable in its field
+      (doseq [[idx {:keys [var-id var-type]}] (map-indexed vector captured-vars)]
+        (.loadThis ctor-gen)
+        (.loadArg ctor-gen idx)
+        (.putField ctor-gen (Type/getObjectType class-name) var-id (resolve-type var-type)))
+      (.returnValue ctor-gen)
+      (.endMethod ctor-gen))
+
+    ;; Generate each method
+    (doseq [{:keys [method-name args return-type body]} methods]
+      (println "  Generating method:" method-name)
+      (make-instance-method writer method-name {:args args :return-type return-type :body body :captured captured-vars :class-name class-name}))
+
+    (.visitEnd writer)
+
+    (let [bytecode (.toByteArray ^ClassWriter writer)]
+      ;; Collect proxy bytecode for JAR packaging
+      (when *proxy-bytecodes*
+        (swap! *proxy-bytecodes* assoc class-name bytecode))
+
+      ;; Define the class for immediate execution
+      (.defineClass ^clojure.lang.DynamicClassLoader
+                    (clojure.lang.DynamicClassLoader.)
+                    (.replace ^String class-name \/ \.)
+                    bytecode nil)
+
+      (decomp/to-bytecode bytecode class-name)
+
+      class-name)))
+
 ;(require '[lasm.decompiler :as decomp])
 
-(defn make-fn [{:keys [class-name body] :as fn-definition}]
+(defn make-fn-bytecode
+  "Generate bytecode for a function without loading it into the classloader.
+   Returns the bytecode as a byte array."
+  [{:keys [class-name body] :as fn-definition}]
   (let [writer (ClassWriter. ClassWriter/COMPUTE_FRAMES)
         body   (if (= :return (first (last body))) body (conj body [:return]))]
-
-    (println "make-fn name=" class-name " body=")
-    (pprint/pprint body)
     (initialize-class writer class-name)
-
     (generate-default-ctor writer)
     (make-static-method writer "invoke" (assoc fn-definition :body body))
     (.visitEnd writer)
+    (.toByteArray ^ClassWriter writer)))
+
+(defn make-fn
+  "Compile a function and load it into the classloader for immediate execution."
+  [{:keys [class-name body] :as fn-definition}]
+  (let [bytecode (make-fn-bytecode fn-definition)]
+    (println "make-fn name=" class-name " body=")
+    (pprint/pprint body)
     (.defineClass ^clojure.lang.DynamicClassLoader
                   (clojure.lang.DynamicClassLoader.)
                   (.replace ^String class-name \/ \.)
-                  (.toByteArray ^ClassWriter writer) nil)
-    (decomp/to-bytecode (.toByteArray ^ClassWriter  writer)
-                       class-name)
-
-    #_(decomp/to-java (.toByteArray ^ClassWriter  writer)
-                    class-name)
+                  bytecode nil)
+    (decomp/to-bytecode bytecode class-name)
     class-name))
 
+
+(defn make-fn-bytecode-with-main
+  "Generate bytecode with both invoke() and main(String[]) methods.
+   Used for JAR entry point classes."
+  [{:keys [class-name body] :as fn-definition}]
+  (let [writer (ClassWriter. ClassWriter/COMPUTE_FRAMES)
+        body   (if (= :return (first (last body))) body (conj body [:return]))]
+    (initialize-class writer class-name)
+    (generate-default-ctor writer)
+    (make-static-method writer "invoke" (assoc fn-definition :body body))
+    ;; Generate main(String[] args) that delegates to invoke()
+    (let [main-method (Method. "main" Type/VOID_TYPE
+                               (into-array Type [(Type/getType (Class/forName "[Ljava.lang.String;"))]))
+          ga (GeneratorAdapter. (int (+ Opcodes/ACC_PUBLIC Opcodes/ACC_STATIC)) main-method nil nil writer)]
+      (.invokeStatic ga (Type/getObjectType class-name)
+                     (Method. "invoke" (resolve-type (:return-type fn-definition))
+                              (into-array Type [])))
+      ;; Pop return value if non-void
+      (when (not= :void (:return-type fn-definition))
+        (.pop ga))
+      (.returnValue ga)
+      (.endMethod ^GeneratorAdapter ga))
+    (.visitEnd writer)
+    (.toByteArray ^ClassWriter writer)))
 
 (defn make-entry-point [class-name code]
   (make-fn {:class-name class-name

@@ -1,5 +1,6 @@
 (ns lasm.ast
-  (:require [lasm.type-checker :as type-checker]))
+  (:require [lasm.type-checker :as type-checker]
+            [clojure.string :as string]))
 
 
 (defn error [expr & [msg ]]
@@ -13,10 +14,12 @@
                    :args args})))
 
 
+(declare map-ast-to-ir add-pop-if-needed needs-pop?)
+
 (defmulti ast-to-ir (fn [expr _]
-                      (if (vector? expr) 
+                      (if (vector? expr)
                         (first expr)
-                        (errorf expr "invalid AST, probably failed parse"))))
+                        (errorf "invalid AST, probably failed parse: %s" expr))))
 
 (defn args-to-locals [args]
   (vec
@@ -78,10 +81,23 @@
                          :var-type (or var-type declared-type)}]]])))
 
 (defmethod ast-to-ir :VarDef [[_ {:keys [var-id var-type]} val-expr] tenv]
-  (let [[_ val-ir] (ast-to-ir val-expr tenv)]
+  (let [;; For reassignment (no type annotation), use existing type from env
+        var-type (or var-type (tenv var-id))
+        [_ val-ir] (ast-to-ir val-expr tenv)]
     [(assoc tenv var-id var-type)
      (conj val-ir
            [:def-local {:var-id var-id :var-type var-type}])]))
+
+(defmethod ast-to-ir :Block [[_ & exprs] tenv]
+  (reduce (fn [[env irs] [idx expr]]
+            (let [[env' ir] (ast-to-ir expr env)
+                  is-last? (= idx (dec (count exprs)))
+                  ir-with-pop (if is-last?
+                                ir
+                                (vec (add-pop-if-needed ir)))]
+              [env' (into irs ir-with-pop)]))
+          [tenv []]
+          (map-indexed vector exprs)))
 
 (defn resolve-cmp-type [arg0 arg1 tenv] ;;TODO Implement me
   :int)
@@ -107,7 +123,6 @@
        truthy-ir
        [[:label {:value exit-lbl}]]))]))
 
-(declare map-ast-to-ir)
 
 (defmethod ast-to-ir :StaticInteropCall [[_ {:keys [class-name method-name static?]} & method-args] tenv]  
   (let [{:keys [args return-type] :as env-type}  (tenv method-name)
@@ -132,7 +147,11 @@
         arg-types (map #(type-checker/ast-expr-to-ir-type % tenv) method-args)
         jvm-type (type-checker/lookup-interop-method-signature class-name method-name arg-types static? tenv)
         [_ args-ir]      (map-ast-to-ir tenv (cons this-expr method-args))
-        ir-op :interop-call
+        ;; Check if target is an interface
+        is-interface? (try
+                        (.isInterface (Class/forName class-name))
+                        (catch Exception _ false))
+        ir-op (if is-interface? :invoke-interface :interop-call)
         {:keys [return-type args]}  (merge-with #(or %1 %2)   jvm-type env-type )]    
     (if  (or env-type jvm-type)
       [tenv
@@ -142,9 +161,90 @@
 
 (defmethod ast-to-ir :CtorInteropCall [[_ {:keys [class-name]} & ctor-args] tenv]
   (let [[_ args-ir] (map-ast-to-ir tenv ctor-args)
-        {:keys [owner] :as ctor-props } (type-checker/make-asm-ctor tenv class-name ctor-args)]    
+        {:keys [owner] :as ctor-props } (type-checker/make-asm-ctor tenv class-name ctor-args)]
     [tenv (conj (into [[:new {:owner owner}]]
                       args-ir) [:invoke-constructor ctor-props])]))
+
+(defmethod ast-to-ir :StaticFieldAccess [[_ {:keys [class-name field-name]}] tenv]
+  ;; Special case: java.lang.Object/null is syntactic sugar for Java null
+  (if (and (= class-name "java.lang.Object") (= field-name "null"))
+    [tenv [[:aconst-null]]]
+    ;; General static field access
+    (let [field-type (type-checker/synth {:expr [:StaticFieldAccess {:class-name class-name
+                                                                      :field-name field-name}]
+                                          :env tenv})]
+      [tenv [[:get-static-field {:owner [:class class-name]
+                                 :name field-name
+                                 :result-type field-type}]]])))
+
+(defn find-var-refs
+  "Recursively find all VarRef nodes in an expression"
+  [expr]
+  (cond
+    ;; If it's a VarRef, return its var-id
+    (and (vector? expr) (= :VarRef (first expr)))
+    #{(get-in expr [1 :var-id])}
+
+    ;; If it's a vector, recurse into all elements
+    (vector? expr)
+    (apply clojure.set/union (map find-var-refs expr))
+
+    ;; If it's a map, recurse into all values
+    (map? expr)
+    (apply clojure.set/union (map find-var-refs (vals expr)))
+
+    ;; If it's a seq, recurse into all elements
+    (seq? expr)
+    (apply clojure.set/union (map find-var-refs expr))
+
+    ;; Otherwise return empty set
+    :else #{}))
+
+(defn find-captured-vars
+  "Find variables referenced in proxy methods that aren't method parameters"
+  [methods outer-env]
+  (let [all-refs (apply clojure.set/union
+                       (for [{:keys [args body]} methods
+                             expr body]
+                         (find-var-refs expr)))
+        param-names (set (mapcat #(map :id (:args %)) methods))
+        ;; Captured vars are those in outer env but not in params
+        captured (clojure.set/difference all-refs param-names)]
+    (filter #(contains? outer-env %) captured)))
+
+(defmethod ast-to-ir :Proxy [[_ {:keys [class-or-interface methods]}] tenv]
+  ;; Generate a unique class name for the proxy
+  (let [proxy-class-name (str "Proxy$" (string/replace class-or-interface "." "_") "$" (gensym))
+        ;; Find captured variables
+        captured-vars (find-captured-vars methods tenv)
+        captured-types (mapv (fn [var-id] {:var-id var-id :var-type (tenv var-id)}) captured-vars)
+        ;; Convert proxy methods to IR format
+        proxy-methods (mapv (fn [{:keys [method-name args return-type body]}]
+                              (let [arg-types (mapv :type args)
+                                    tenv-with-params (into tenv (map (juxt :id :type) args))
+                                    ;; Process method body - same as FunDef with POP handling
+                                    [_ body-irs]
+                                    (reduce (fn [[env irs] [idx expr]]
+                                              (let [[env' ir] (ast-to-ir expr env)
+                                                    is-last? (= idx (dec (count body)))
+                                                    ;; For void methods, pop last expression too
+                                                    ir-with-pop (if (and is-last? (= return-type :void))
+                                                                  (vec (add-pop-if-needed ir))
+                                                                  (if is-last?
+                                                                    ir
+                                                                    (vec (add-pop-if-needed ir))))]
+                                                [env' (into irs ir-with-pop)]))
+                                            [tenv-with-params []]
+                                            (map-indexed vector body))]
+                                {:method-name method-name
+                                 :args arg-types
+                                 :return-type return-type
+                                 :body (into (args-to-locals args) body-irs)}))
+                            methods)]
+    [tenv [[:proxy {:class-name proxy-class-name
+                    :interface class-or-interface
+                    :methods proxy-methods
+                    :captured captured-types}]]]))
 
 (defmethod ast-to-ir :FunCall [[_ fn-name & fn-args] tenv]
   (if-let [fn-type  (tenv fn-name)]
@@ -166,12 +266,47 @@
     (errorf "Unknown function signature for fn-name: %s" fn-name fn-args tenv)))
 
 
+(defn needs-pop? [ir-instruction]
+  "Check if an IR instruction leaves a non-void value on the stack"
+  (when (vector? ir-instruction)
+    (case (first ir-instruction)
+      :interop-call (let [[_ [_ _ return-type]] ir-instruction]
+                      (not= return-type :void))
+      :call-fn (let [[_ [_ _ return-type]] ir-instruction]
+                 (not= return-type :void))
+      :static-interop-call (let [[_ [_ _ return-type]] ir-instruction]
+                             (not= return-type :void))
+      :print-str true    ;; print-str leaves the string on the stack
+      :print true        ;; print leaves the int on the stack
+      false)))
+
+(defn add-pop-if-needed [ir-seq]
+  "Add POP instruction after IR that leaves unused values on stack"
+  (if (and (seq ir-seq)
+           (needs-pop? (last ir-seq)))
+    (conj ir-seq [:pop])
+    ir-seq))
+
 (defmethod ast-to-ir :FunDef [[_ {:keys [args return-type fn-name]} & body] tenv]
 ;;  (println [args return-type fn-name] body )
   (let [arg-types (mapv :type args)
         tenv'     (assoc tenv fn-name {:args arg-types :return-type return-type})
         tenv-with-params (into tenv' (map (juxt :id :type) args))
-        [tenv'' body-irs] (map-ast-to-ir tenv-with-params body)]
+        ;; Process each body expression separately to handle POPs
+        [tenv'' body-irs]
+        (reduce (fn [[env irs] [idx expr]]
+                  (let [[env' ir] (ast-to-ir expr env)
+                        ;; Add POP for non-last expressions that leave values
+                        is-last? (= idx (dec (count body)))
+                        ;; For void functions, pop last expression too
+                        ir-with-pop (if (and is-last? (= return-type :void))
+                                      (vec (add-pop-if-needed ir))
+                                      (if is-last?
+                                        ir  ;; Last expression is the return value
+                                        (vec (add-pop-if-needed ir))))]
+                    [env' (into irs ir-with-pop)]))
+                [tenv-with-params []]
+                (map-indexed vector body))]
     [tenv'
      [{:class-name fn-name
        :args arg-types
@@ -232,7 +367,7 @@
   (reduce (fn [[env checked-exprs] expr]
             (let [[env' checked] (type-checker/augment {:env env
                                                         :expr expr})]
-              [env' (into checked-exprs checked)]))
+              [env' (conj checked-exprs checked)]))
           [env []]
           exprs))
 

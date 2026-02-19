@@ -6,14 +6,16 @@
 (def parser
   (insta/parser
 "
-Prog := TopLevelExpr (ws expr-delim+ ws TopLevelExpr)*
-<TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr | CtorInteropExpr
-<Expr> := TopLevelExpr | BoolExpr | StringExpr | NumExpr | VarExpr | IfExpr | BinOpExpr | EqOpExpr 
+Prog := wc TopLevelExpr (ws expr-delim+ ws TopLevelExpr)* wc
+<TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr | StaticFieldAccessExpr | CtorInteropExpr | ProxyExpr
+<Expr> := TopLevelExpr | BoolExpr | StringExpr | NumExpr | VarExpr | IfExpr | BinOpExpr | EqOpExpr
+BlockExpr := <'{'> wc Expr (wc expr-delim+ wc Expr)* wc <'}'>
+<IfBranch> := BlockExpr | Expr
 <expr-delim> := <';'> | newline
 <newline> := <'\n'>
 <ws> := <' '>*
 <wc> := (ws | newline)*
-<symbol> :=  #'^(?!true|false)[a-zA-Z][a-zA-Z0-9]*'
+<symbol> :=  #'^(?!true|false)[a-zA-Z][a-zA-Z0-9_]*'
 <fullyQualifiedType> := #'[a-zA-Z][\\.a-zA-Z0-9]*'
 <comma> := <','>
 <comma-delimited-exprs> := Expr (ws comma ws Expr)*
@@ -22,20 +24,24 @@ StringExpr := <'\"'> #'[.[^\"]]*' <'\"'>
 NumExpr := #'[0-9]+'
 BoolExpr := 'true' | 'false'
 VarDefExpr := VarExpr ws <'='> ws Expr
-IfExpr := <'if'> ws EqOpExpr wc  Expr wc <'else'> wc Expr wc
+IfExpr := <'if'> ws EqOpExpr wc  IfBranch wc <'else'> wc IfBranch wc
 BinOpExpr  := Expr ws BinOp ws Expr
 EqOpExpr  := Expr ws EqOp ws Expr
 BinOp :=  '+' | '-' | '/' | '*'
 EqOp := '>' | '<' | '>=' | '<=' | '==' | '!='
 <TypeAnnotation> := ws <':'> ws TypeExpr
-FunDefExpr := <'fn'>ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=>'> ws body
+FunDefExpr := <'fn'> ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=>'> ws body
 TypeExpr := 'bool' | 'string' | 'int' | 'void' | fullyQualifiedType
 params := VarExpr? (ws <','> ws VarExpr)*
-body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
+body := <'{'> wc Expr (wc expr-delim+ wc Expr)* wc <'}'> | wc Expr ws (expr-delim ws Expr)*
+proxy-body := <'{'> wc Expr (wc expr-delim+ wc Expr)* wc <'}'>
 FunCallExpr := symbol  <'('> comma-delimited-exprs? <')'>
 StaticInteropCallExpr := fullyQualifiedType<'/'>symbol <'('> comma-delimited-exprs? <')'>
+StaticFieldAccessExpr := fullyQualifiedType<'/'>symbol
 InteropCallExpr := ( StringExpr | VarExpr | FunCallExpr )<'.'>symbol<'('> comma-delimited-exprs? <')'>
-CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>"))
+CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
+ProxyExpr := <'proxy'> ws fullyQualifiedType ws <'{'> wc ProxyMethod (wc ProxyMethod)* wc <'}'>
+ProxyMethod := symbol ws <'('> ws params ws <')'> TypeAnnotation ws <'=>'> ws proxy-body"))
 
 
 
@@ -44,11 +50,12 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
                     {:expr expr
                      :msg (apply format msg-args)})))
 
-#_(defn trans-type [[_ type-str]]
+(defn trans-type [[_ type-str]]
   ;; TODO for now this is good enough, but this needs to get smarter
   ;; once we want to support class names and java objects
   (cond
     (= type-str "string") [:class "java.lang.String"]
+    (= type-str "bool") :bool
     (string/includes? type-str ".") [:class type-str]
     :else
     (keyword type-str)))
@@ -56,16 +63,21 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
 
 (defn trans-param [[_ arg-id type-expr]]
   {:id arg-id
-   :type type-expr})
+   :type (trans-type type-expr)})
 
 (defmulti  trans-to-ast (fn [expr]
                           (if (insta/failure? expr)
                             (error expr "invalid parse tree, probably failed parse")
                             (first expr))))
 
-(defmethod trans-to-ast :TypeExpr [type-expr]  type-expr)
+(defmethod trans-to-ast :TypeExpr [type-expr]  (trans-type type-expr))
 
-(defmethod trans-to-ast :StringExpr [[_ str-val]] [:String str-val])
+(defmethod trans-to-ast :StringExpr [[_ str-val]]
+  [:String (-> str-val
+               (string/replace "\\\\", "\u0000")
+               (string/replace "\\n" "\n")
+               (string/replace "\\t" "\t")
+               (string/replace "\u0000" "\\"))])
 
 (defmethod trans-to-ast :NumExpr [[_ num-val]] [:Int (Integer/parseInt num-val)])
 
@@ -98,12 +110,14 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
 (defmethod trans-to-ast :IfExpr [[_ & exprs]]
   (into [:If] (mapv trans-to-ast exprs)))
 
-(defmethod trans-to-ast :FunDefExpr [[_ fn-name [_ & params] return-type  [_ & body]]]
-  (into
-   [:FunDef {:args (mapv trans-param params)
-             :fn-name fn-name
-             :return-type  return-type}]
-   (mapv trans-to-ast body)))
+(defmethod trans-to-ast :FunDefExpr [[_ fn-name params-node return-type body-node]]
+  (let [[_ & params] params-node
+        [_ & body] body-node]
+    (into
+     [:FunDef {:args (mapv trans-param params)
+               :fn-name fn-name
+               :return-type (trans-type return-type)}]
+     (mapv trans-to-ast body))))
 
 (defmethod trans-to-ast :FunCallExpr [[_ fn-name & arg-exprs]]
   (into
@@ -130,6 +144,27 @@ CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
     {:class-name  class-name
      :method-name method-name}]
    (mapv trans-to-ast args)))
+
+(defmethod trans-to-ast :StaticFieldAccessExpr [[_ class-name field-name]]
+  [:StaticFieldAccess
+   {:class-name class-name
+    :field-name field-name}])
+
+(defmethod trans-to-ast :BlockExpr [[_ & exprs]]
+  (into [:Block] (mapv trans-to-ast exprs)))
+
+(defmethod trans-to-ast :ProxyMethod [[_ method-name params-node return-type body-node]]
+  (let [[_ & params] params-node
+        [_ & body] body-node]
+    {:method-name method-name
+     :args (mapv trans-param params)
+     :return-type (trans-type return-type)
+     :body (mapv trans-to-ast body)}))
+
+(defmethod trans-to-ast :ProxyExpr [[_ class-or-interface & methods]]
+  [:Proxy
+   {:class-or-interface class-or-interface
+    :methods (mapv trans-to-ast methods)}])
 
 (defn parse-tree-to-ast [[_ & exprs]]
   (mapv trans-to-ast exprs))

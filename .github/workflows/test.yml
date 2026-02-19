@@ -1,0 +1,70 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test:
+    name: Run Lasm Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+
+    - name: Install Clojure
+      uses: DeLaGuardo/setup-clojure@12.5
+      with:
+        cli: 1.11.1.1273
+
+    - name: Cache Clojure dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.m2/repository
+          ~/.gitlibs
+          ~/.deps.clj
+        key: ${{ runner.os }}-clojure-${{ hashFiles('**/deps.edn') }}
+        restore-keys: |
+          ${{ runner.os }}-clojure-
+
+    - name: Run tests
+      run: clojure -M:tests
+
+    - name: Test example files compile
+      run: |
+        echo "Testing that all example files parse and compile..."
+        clojure -M -e "
+        (require '[lasm.parser :as p]
+                 '[lasm.ast :as ast]
+                 '[instaparse.core :as insta])
+
+        (doseq [file (file-seq (clojure.java.io/file \"examples\"))
+                :when (.endsWith (.getName file) \".lasm\")]
+          (println \"Testing\" (.getName file))
+          (let [code (slurp file)
+                parsed (p/parser code)]
+            (if (insta/failure? parsed)
+              (do
+                (println \"❌ FAILED:\" (.getName file))
+                (println parsed)
+                (System/exit 1))
+              (do
+                (ast/build-program (p/parse-tree-to-ast parsed))
+                (println \"✓ OK:\" (.getName file))))))
+
+        (println \"\n✅ All example files compile successfully!\")
+        "
+
+    - name: Report test results
+      if: always()
+      run: echo "Test run completed"

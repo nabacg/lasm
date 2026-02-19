@@ -1,0 +1,238 @@
+fn createIntArray(size: int): java.lang.Object => {
+  intType:java.lang.Class = java.lang.Integer/TYPE
+  java.lang.reflect.Array/newInstance(intType, size)
+}
+
+fn getArrayElement(arr: java.lang.Object, index: int): int => {
+  java.lang.reflect.Array/getInt(arr, index)
+}
+
+fn setArrayElement(arr: java.lang.Object, index: int, value: int): void => {
+  java.lang.reflect.Array/setInt(arr, index, value)
+}
+
+fn max(a: int, b: int): int => {
+  if a > b
+    a
+  else
+    b
+}
+
+fn min(a: int, b: int): int => {
+  if a < b
+    a
+  else
+    b
+}
+
+fn abs(x: int): int => {
+  if x < 0
+    0 - x
+  else
+    x
+}
+
+fn main(): int => {
+  ballX:java.lang.Object = createIntArray(1)
+  ballY:java.lang.Object = createIntArray(1)
+  ballDX:java.lang.Object = createIntArray(1)
+  ballDY:java.lang.Object = createIntArray(1)
+  leftPaddleY:java.lang.Object = createIntArray(1)
+  rightPaddleY:java.lang.Object = createIntArray(1)
+  leftScore:java.lang.Object = createIntArray(1)
+  rightScore:java.lang.Object = createIntArray(1)
+
+  setArrayElement(ballX, 0, 392)
+  setArrayElement(ballY, 0, 280)
+  setArrayElement(ballDX, 0, 3)
+  setArrayElement(ballDY, 0, 2)
+  setArrayElement(leftPaddleY, 0, 250)
+  setArrayElement(rightPaddleY, 0, 250)
+  setArrayElement(leftScore, 0, 0)
+  setArrayElement(rightScore, 0, 0)
+
+  frame:javax.swing.JFrame = new javax.swing.JFrame("LASM PONG")
+  panel:javax.swing.JPanel = new javax.swing.JPanel()
+  panel.setLayout(java.lang.Object/null)
+  black:java.awt.Color = new java.awt.Color(0, 0, 0)
+  panel.setBackground(black)
+  white:java.awt.Color = new java.awt.Color(255, 255, 255)
+
+  ball:javax.swing.JPanel = new javax.swing.JPanel()
+  ball.setBackground(white)
+  ball.setBounds(392, 280, 15, 15)
+
+  leftPaddle:javax.swing.JPanel = new javax.swing.JPanel()
+  leftPaddle.setBackground(white)
+  leftPaddle.setBounds(20, 250, 10, 80)
+
+  rightPaddle:javax.swing.JPanel = new javax.swing.JPanel()
+  rightPaddle.setBackground(white)
+  rightPaddle.setBounds(760, 250, 10, 80)
+
+  scoreLabel:javax.swing.JLabel = new javax.swing.JLabel("0 : 0")
+  scoreLabel.setForeground(white)
+  scoreFont:java.awt.Font = new java.awt.Font("Monospaced", 1, 28)
+  scoreLabel.setFont(scoreFont)
+  scoreLabel.setBounds(340, 10, 120, 35)
+
+  panel.add(ball)
+  panel.add(leftPaddle)
+  panel.add(rightPaddle)
+  panel.add(scoreLabel)
+  frame.add(panel)
+
+  d:java.awt.Dimension = new java.awt.Dimension(800, 600)
+  frame.setSize(d)
+  frame.setDefaultCloseOperation(3)
+
+  keyListener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
+    keyPressed(e:java.awt.event.KeyEvent): void => {
+      code:int = e.getKeyCode()
+      currentLeft:int = getArrayElement(leftPaddleY, 0)
+      currentRight:int = getArrayElement(rightPaddleY, 0)
+
+      if code == 87 {
+        newLeft:int = max(0, currentLeft - 20)
+        setArrayElement(leftPaddleY, 0, newLeft)
+      } else {
+        if code == 83 {
+          newLeft:int = min(440, currentLeft + 20)
+          setArrayElement(leftPaddleY, 0, newLeft)
+        } else {
+          if code == 38 {
+            newRight:int = max(0, currentRight - 20)
+            setArrayElement(rightPaddleY, 0, newRight)
+          } else {
+            if code == 40 {
+              newRight:int = min(440, currentRight + 20)
+              setArrayElement(rightPaddleY, 0, newRight)
+            } else {
+              setArrayElement(leftPaddleY, 0, currentLeft)
+            }
+          }
+        }
+      }
+    }
+    keyReleased(e:java.awt.event.KeyEvent): void => {
+      printstr("")
+    }
+    keyTyped(e:java.awt.event.KeyEvent): void => {
+      printstr("")
+    }
+  }
+
+  frame.addKeyListener(keyListener)
+
+  timerListener:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
+    actionPerformed(e:java.awt.event.ActionEvent): void => {
+      x:int = getArrayElement(ballX, 0)
+      y:int = getArrayElement(ballY, 0)
+      dx:int = getArrayElement(ballDX, 0)
+      dy:int = getArrayElement(ballDY, 0)
+      leftY:int = getArrayElement(leftPaddleY, 0)
+      rightY:int = getArrayElement(rightPaddleY, 0)
+
+      newX:int = x + dx
+      newY:int = y + dy
+      newDX:int = dx
+      newDY:int = dy
+
+      if newY <= 0 {
+        newDY = abs(dy)
+        newY = 0
+      } else {
+        if newY >= 545 {
+          newDY = 0 - abs(dy)
+          newY = 545
+        } else {
+          newDY = dy
+        }
+      }
+
+      ballBottom:int = newY + 15
+      leftPdlBottom:int = leftY + 80
+      rightPdlBottom:int = rightY + 80
+
+      if newX <= 30 {
+        if ballBottom > leftY {
+          if newY < leftPdlBottom {
+            newDX = abs(dx)
+            newX = 30
+          } else {
+            newDX = dx
+          }
+        } else {
+          newDX = dx
+        }
+      } else {
+        if newX >= 745 {
+          if ballBottom > rightY {
+            if newY < rightPdlBottom {
+              newDX = 0 - abs(dx)
+              newX = 745
+            } else {
+              newDX = dx
+            }
+          } else {
+            newDX = dx
+          }
+        } else {
+          newDX = dx
+        }
+      }
+
+      if newX < 0 {
+        rs:int = getArrayElement(rightScore, 0)
+        setArrayElement(rightScore, 0, rs + 1)
+        setArrayElement(ballX, 0, 392)
+        setArrayElement(ballY, 0, 280)
+        setArrayElement(ballDX, 0, 3)
+        setArrayElement(ballDY, 0, 2)
+
+        lsStr:string = java.lang.String/valueOf(getArrayElement(leftScore, 0))
+        newRs:int = rs + 1
+        rsStr:string = java.lang.String/valueOf(newRs)
+        tmp:string = lsStr.concat(" : ")
+        scoreText:string = tmp.concat(rsStr)
+        scoreLabel.setText(scoreText)
+        ball.setBounds(392, 280, 15, 15)
+      } else {
+        if newX > 785 {
+          ls:int = getArrayElement(leftScore, 0)
+          setArrayElement(leftScore, 0, ls + 1)
+          setArrayElement(ballX, 0, 392)
+          setArrayElement(ballY, 0, 280)
+          setArrayElement(ballDX, 0, 0 - 3)
+          setArrayElement(ballDY, 0, 2)
+
+          newLs:int = ls + 1
+          lsStr:string = java.lang.String/valueOf(newLs)
+          rsStr:string = java.lang.String/valueOf(getArrayElement(rightScore, 0))
+          tmp:string = lsStr.concat(" : ")
+          scoreText:string = tmp.concat(rsStr)
+          scoreLabel.setText(scoreText)
+          ball.setBounds(392, 280, 15, 15)
+        } else {
+          setArrayElement(ballX, 0, newX)
+          setArrayElement(ballY, 0, newY)
+          setArrayElement(ballDX, 0, newDX)
+          setArrayElement(ballDY, 0, newDY)
+          ball.setBounds(newX, newY, 15, 15)
+        }
+      }
+
+      leftPaddle.setBounds(20, leftY, 10, 80)
+      rightPaddle.setBounds(760, rightY, 10, 80)
+    }
+  }
+
+  timerObj:javax.swing.Timer = new javax.swing.Timer(16, timerListener)
+  timerObj.start()
+
+  frame.setVisible(true)
+  frame.requestFocus()
+  42
+}
+
+main()

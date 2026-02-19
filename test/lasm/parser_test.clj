@@ -1,6 +1,7 @@
 (ns lasm.parser-test
   (:require [clojure.test :as t]
-            [lasm.parser :as p]))
+            [lasm.parser :as p]
+            [instaparse.core :as insta]))
 
 
 
@@ -185,6 +186,76 @@ printstr(Main().replace(\"H\", \"->\"))"
        [:String "H"]
        [:String "->"]]]])
 
+
+(t/deftest multi-method-proxy-parsing
+  (t/testing "Single-method proxy parses"
+    (let [code "fn test(): int => {
+  al:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
+    actionPerformed(e:java.awt.event.ActionEvent): void => { printstr(\"click\") }
+  }
+  42
+}
+test()"]
+      (t/is (not (insta/failure? (p/parser code))))))
+
+  (t/testing "Three-method proxy (KeyListener) parses"
+    (let [code "fn test(): int => {
+  kl:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
+    keyPressed(e:java.awt.event.KeyEvent): void => { printstr(\"pressed\") }
+    keyReleased(e:java.awt.event.KeyEvent): void => { printstr(\"released\") }
+    keyTyped(e:java.awt.event.KeyEvent): void => { printstr(\"typed\") }
+  }
+  42
+}
+test()"]
+      (t/is (not (insta/failure? (p/parser code))))))
+
+  (t/testing "Five-method proxy (MouseListener) parses"
+    (let [code "fn test(): int => {
+  ml:java.awt.event.MouseListener = proxy java.awt.event.MouseListener {
+    mouseClicked(e:java.awt.event.MouseEvent): void => { printstr(\"c\") }
+    mousePressed(e:java.awt.event.MouseEvent): void => { printstr(\"p\") }
+    mouseReleased(e:java.awt.event.MouseEvent): void => { printstr(\"r\") }
+    mouseEntered(e:java.awt.event.MouseEvent): void => { printstr(\"en\") }
+    mouseExited(e:java.awt.event.MouseEvent): void => { printstr(\"ex\") }
+  }
+  42
+}
+test()"]
+      (t/is (not (insta/failure? (p/parser code))))))
+
+  (t/testing "Multiple proxies in same function parse"
+    (let [code "fn test(): int => {
+  al:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
+    actionPerformed(e:java.awt.event.ActionEvent): void => { printstr(\"action\") }
+  }
+  kl:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
+    keyPressed(e:java.awt.event.KeyEvent): void => { printstr(\"p\") }
+    keyReleased(e:java.awt.event.KeyEvent): void => { printstr(\"r\") }
+    keyTyped(e:java.awt.event.KeyEvent): void => { printstr(\"t\") }
+  }
+  42
+}
+test()"]
+      (t/is (not (insta/failure? (p/parser code))))))
+
+  (t/testing "Proxy AST has correct structure"
+    (let [code "fn test(): int => {
+  kl:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
+    keyPressed(e:java.awt.event.KeyEvent): void => { printstr(\"pressed\") }
+    keyReleased(e:java.awt.event.KeyEvent): void => { printstr(\"released\") }
+  }
+  42
+}
+test()"
+          ast (p/parse-tree-to-ast (p/parser code))
+          fundef (first ast)
+          vardef (nth fundef 2)
+          proxy-node (nth vardef 2)
+          methods (get-in proxy-node [1 :methods])]
+      (t/is (= 2 (count methods)))
+      (t/is (= "keyPressed" (:method-name (first methods))))
+      (t/is (= "keyReleased" (:method-name (second methods)))))))
 
   (comment
     ;; expected error

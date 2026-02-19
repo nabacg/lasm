@@ -1,0 +1,7 @@
+frame:javax.swing.JFrame = new javax.swing.JFrame("Lasm - Window with Label")
+label:javax.swing.JLabel = new javax.swing.JLabel("Hello World from Lasm!")
+container:java.awt.Container = frame.getContentPane()
+container.add(label)
+frame.pack()
+frame.setVisible(true)
+printstr("Window with label created!")
