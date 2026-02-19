@@ -22,7 +22,7 @@ fn createLabel(text: string): javax.swing.JLabel => {
     label
 }
 
-fn initializeGame(): void => {
+fn initializeGame(): string => {
     frame:javax.swing.JFrame = createGameFrame()
     panel:javax.swing.JPanel = createPanel()
 
@@ -44,7 +44,7 @@ fn initializeGame(): void => {
     printstr("Pong game initialized!")
 }
 
-fn main(): void => {
+fn main(): string => {
     printstr("=================================")
     printstr("  Lasm Pong Game Demo")
     printstr("=================================")
