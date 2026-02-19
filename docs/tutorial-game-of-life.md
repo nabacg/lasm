@@ -1,8 +1,8 @@
 # Building Conway's Game of Life in LASM
 
-After building [Pong](tutorial-pong.md), Game of Life is a natural next step. It exercises different muscles: recursive grid traversal, text-based rendering, and more complex state management.
+After building [Pong](tutorial-pong.md), Game of Life is a natural next step. It exercises different muscles: recursive grid traversal, pixel rendering with `BufferedImage`, and user input via dialog boxes.
 
-The final result is ~285 lines of LASM that compiles to a standalone JAR. It renders a 25x25 grid in a JTextArea with green-on-black terminal aesthetics.
+The final result is ~270 lines of LASM that compiles to a standalone JAR. At startup it asks you for a grid size, shows you the controls, then launches a pixel-rendered simulation with green tiles on a dark grid.
 
 ## The Challenge
 
@@ -10,26 +10,26 @@ Game of Life needs:
 - A 2D grid of cells (alive or dead)
 - A function to count each cell's neighbors
 - A step function that applies the rules to every cell
-- A rendering function that converts the grid to text
+- A rendering function that draws colored tiles
 - Keyboard controls for pause, reset, and patterns
 
 LASM has no loops, no 2D arrays, and no mutable variables. We'll use the same patterns from Pong -- flat arrays for state, recursion for iteration -- but at a larger scale.
 
 ## Data Model: Flat Arrays
 
-A 25x25 grid has 625 cells. We store it as a flat int array where cell `(row, col)` lives at index `row * cols + col`:
+We store the grid as a flat int array where cell `(row, col)` lives at index `row * cols + col`. The grid size is chosen by the user at startup:
 
 ```lasm
-fn createIntArray(size: int): java.lang.Object => {
-  intType:java.lang.Class = java.lang.Integer/TYPE
-  java.lang.reflect.Array/newInstance(intType, size)
-}
+sizeStr:string = javax.swing.JOptionPane/showInputDialog("Enter grid size (10-50):")
+rows:int = java.lang.Integer/parseInt(sizeStr)
+cols:int = rows
+total:int = rows * cols
 
-current:java.lang.Object = createIntArray(625)
-next:java.lang.Object = createIntArray(625)
+current:java.lang.Object = createIntArray(total)
+next:java.lang.Object = createIntArray(total)
 ```
 
-Two arrays for double buffering: read from `current`, write to `next`, then copy `next` back to `current`.
+Two arrays for double buffering: read from `current`, write to `next`, then copy `next` back to `current`. The `JOptionPane.showInputDialog` pops up a dialog asking for the grid size, and `Integer.parseInt` converts the string response to an int.
 
 ## Bounds-Checked Cell Access
 
@@ -95,7 +95,7 @@ This is where the Game of Life rules live. For each cell, we apply:
 - **Dead + exactly 3 neighbors** = becomes alive
 - **Everything else** = dead
 
-Since there are no loops, we iterate recursively over all 625 cells:
+Since there are no loops, we iterate recursively over all cells:
 
 ```lasm
 fn stepCell(current: java.lang.Object, next: java.lang.Object,
@@ -135,90 +135,63 @@ fn stepCell(current: java.lang.Object, next: java.lang.Object,
 
 The `else` branch does a no-op read/write. LASM requires both branches of an if/else to exist and have the same type, so for `void` functions we perform a harmless operation.
 
-## Recursive Grid Operations
+## Pixel Rendering with BufferedImage
 
-Every operation that touches every cell follows the same pattern: a function that processes index `i`, then calls itself with `i + 1`:
+Instead of Pong's component-based approach, Game of Life renders directly to a `BufferedImage` using Java2D. Each cell becomes a colored square tile on a dark grid:
 
 ```lasm
-fn copyGrid(src: java.lang.Object, dst: java.lang.Object, i: int, total: int): void => {
-  if i < total {
-    val:int = getArrayElement(src, i)
-    setArrayElement(dst, i, val)
-    nextI:int = i + 1
-    copyGrid(src, dst, nextI, total)
-  } else {
-    setArrayElement(dst, 0, getArrayElement(dst, 0))
-  }
-}
+cellSize:int = 16
+imgW:int = cols * cellSize
+imgH:int = rows * cellSize
+img:java.awt.image.BufferedImage = new java.awt.image.BufferedImage(imgW, imgH, 1)
+gfx:java.awt.Graphics2D = img.createGraphics()
 
-fn clearGrid(grid: java.lang.Object, i: int, total: int): void => {
-  if i < total {
-    setArrayElement(grid, i, 0)
-    nextI:int = i + 1
-    clearGrid(grid, nextI, total)
-  } else {
-    setArrayElement(grid, 0, 0)
-  }
-}
+aliveColor:java.awt.Color = new java.awt.Color(0, 200, 0)
+deadColor:java.awt.Color = new java.awt.Color(40, 40, 40)
 ```
 
-`randomizeGrid` uses `java.util.Random` -- about 25% of cells start alive:
+The `1` in the `BufferedImage` constructor is `TYPE_INT_RGB`. Each cell is drawn as a 15x15 filled rectangle on a 16x16 grid, leaving 1-pixel black gaps that form the grid lines.
+
+The rendering function walks every cell recursively, setting the color and drawing a filled rectangle:
 
 ```lasm
-fn randomizeGrid(grid: java.lang.Object, rng: java.util.Random,
-                 i: int, total: int): void => {
+fn renderCell(gfx: java.awt.Graphics2D, grid: java.lang.Object, i: int, total: int,
+              cols: int, cellSize: int, aliveColor: java.awt.Color,
+              deadColor: java.awt.Color): void => {
   if i < total {
-    val:int = rng.nextInt(4)
-    if val == 0 {
-      setArrayElement(grid, i, 1)
+    row:int = i / cols
+    rc:int = row * cols
+    col:int = i - rc
+    alive:int = getArrayElement(grid, i)
+    x:int = col * cellSize
+    y:int = row * cellSize
+    cs:int = cellSize - 1
+
+    if alive == 1 {
+      gfx.setColor(aliveColor)
     } else {
-      setArrayElement(grid, i, 0)
+      gfx.setColor(deadColor)
     }
+    gfx.fillRect(x, y, cs, cs)
+
     nextI:int = i + 1
-    randomizeGrid(grid, rng, nextI, total)
+    renderCell(gfx, grid, nextI, total, cols, cellSize, aliveColor, deadColor)
   } else {
     setArrayElement(grid, 0, getArrayElement(grid, 0))
   }
 }
 ```
 
-## Text-Based Rendering
-
-Instead of Pong's null-layout approach, Game of Life renders the entire grid as a string and displays it in a `JTextArea`. Alive cells are `##`, dead cells are two spaces:
+The image is displayed via a `JLabel` with an `ImageIcon`:
 
 ```lasm
-fn renderRow(grid: java.lang.Object, rowStart: int, col: int,
-             cols: int, acc: string): string => {
-  if col < cols {
-    idx:int = rowStart + col
-    cell:int = getArrayElement(grid, idx)
-    nextCol:int = col + 1
-    if cell == 1 {
-      updatedAcc:string = acc.concat("##")
-      renderRow(grid, rowStart, nextCol, cols, updatedAcc)
-    } else {
-      updatedAcc:string = acc.concat("  ")
-      renderRow(grid, rowStart, nextCol, cols, updatedAcc)
-    }
-  } else
-    acc
-}
-
-fn renderGrid(grid: java.lang.Object, row: int, rows: int,
-              cols: int, acc: string): string => {
-  if row < rows {
-    rowStart:int = row * cols
-    rowStr:string = renderRow(grid, rowStart, 0, cols, "")
-    accRow:string = acc.concat(rowStr)
-    withNewline:string = accRow.concat("\n")
-    nextRow:int = row + 1
-    renderGrid(grid, nextRow, rows, cols, withNewline)
-  } else
-    acc
-}
+icon:javax.swing.ImageIcon = new javax.swing.ImageIcon(img)
+label:javax.swing.JLabel = new javax.swing.JLabel(icon)
+frame.add(label)
+frame.pack()
 ```
 
-This builds the output string by recursive accumulation. `renderRow` builds one row left-to-right, `renderGrid` builds all rows top-to-bottom. Each function takes an `acc` (accumulator) string and appends to it.
+Each frame, after rendering to the `BufferedImage`, we just call `label.repaint()` to update the display. The `ImageIcon` wraps the same image buffer, so the new pixels appear immediately.
 
 ## Seeding Patterns: The Glider
 
@@ -256,39 +229,21 @@ fn addGlider(grid: java.lang.Object, startRow: int, startCol: int, cols: int): v
 
 Lots of index math, but it's straightforward: compute `row * cols + col` for each cell and set it to 1.
 
-## Putting It Together
+## User Input and Controls
 
-The `main` function wires everything up:
-
-```lasm
-fn main(): int => {
-  rows:int = 25
-  cols:int = 25
-  total:int = 625
-
-  current:java.lang.Object = createIntArray(total)
-  next:java.lang.Object = createIntArray(total)
-  pauseFlag:java.lang.Object = createIntArray(1)
-  genCount:java.lang.Object = createIntArray(1)
-
-  rng:java.util.Random = new java.util.Random()
-  randomizeGrid(current, rng, 0, total)
-```
-
-The display uses a JTextArea with monospace font, green on black:
+At startup, the program shows two dialog boxes using `JOptionPane`:
 
 ```lasm
-  textArea:javax.swing.JTextArea = new javax.swing.JTextArea(25, 50)
-  monoFont:java.awt.Font = new java.awt.Font("Monospaced", 1, 14)
-  textArea.setFont(monoFont)
-  textArea.setEditable(false)
-  textArea.setBackground(black)
-  textArea.setForeground(green)
+sizeStr:string = javax.swing.JOptionPane/showInputDialog("Enter grid size (10-50):")
+rows:int = java.lang.Integer/parseInt(sizeStr)
+
+controlsMsg:string = "Controls:\n\n  SPACE = Pause / Resume\n  R = Randomize grid\n  C = Clear grid\n  G = Add glider pattern\n\nPress OK to start."
+javax.swing.JOptionPane/showMessageDialog(java.lang.Object/null, controlsMsg)
 ```
 
-### Keyboard Controls
+The `showInputDialog` returns a string, which we convert to an int with `Integer.parseInt`. The `showMessageDialog` takes `null` as the parent component (`java.lang.Object/null` is how LASM expresses null) and a message string.
 
-The KeyListener handles four keys:
+The KeyListener handles four keys with nested if/else:
 
 ```lasm
 keyListener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
@@ -327,7 +282,7 @@ keyListener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
 
 ### The Timer
 
-The ActionListener runs every 150ms. When not paused, it steps the simulation, copies the result back, and updates the generation counter. Every tick (paused or not), it re-renders and updates the title:
+The ActionListener runs every 100ms. When not paused, it steps the simulation, copies the result back, and updates the generation counter. Every tick, it re-renders the grid and updates the window title:
 
 ```lasm
 timerListener:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
@@ -338,13 +293,14 @@ timerListener:java.awt.event.ActionListener = proxy java.awt.event.ActionListene
       stepCell(current, next, 0, total, rows, cols)
       copyGrid(next, current, 0, total)
       gen:int = getArrayElement(genCount, 0)
-      setArrayElement(genCount, 0, gen + 1)
+      genPlus:int = gen + 1
+      setArrayElement(genCount, 0, genPlus)
     } else {
       setArrayElement(pauseFlag, 0, getArrayElement(pauseFlag, 0))
     }
 
-    gridStr:string = renderGrid(current, 0, rows, cols, "")
-    textArea.setText(gridStr)
+    renderCell(gfx, current, 0, total, cols, cellSize, aliveColor, deadColor)
+    label.repaint()
 
     g:int = getArrayElement(genCount, 0)
     genStr:string = java.lang.String/valueOf(g)
@@ -354,7 +310,7 @@ timerListener:java.awt.event.ActionListener = proxy java.awt.event.ActionListene
   }
 }
 
-timerObj:javax.swing.Timer = new javax.swing.Timer(150, timerListener)
+timerObj:javax.swing.Timer = new javax.swing.Timer(100, timerListener)
 timerObj.start()
 ```
 
@@ -365,14 +321,16 @@ clj -M -m lasm.cli compile examples/07_game_of_life.lasm -o game_of_life.jar
 java -jar game_of_life.jar
 ```
 
-You'll see a grid of green `##` symbols evolving on a black background. The title bar shows the generation count. Press Space to pause, R to randomize, C to clear, G to drop a glider.
+A dialog asks for the grid size, another shows the controls, then the simulation launches. Green tiles pulse and evolve on a dark grid. The title bar tracks the generation count.
 
 ## Interesting Observations
 
-**String concatenation as rendering.** Every frame, we build the entire display string from scratch by recursively walking 625 cells and concatenating `##` or spaces. This creates ~700 intermediate string objects per frame. On a modern JVM, this is fine -- the GC handles it without visible latency at 150ms per frame.
+**BufferedImage as a frame buffer.** We create a single `BufferedImage` and `Graphics2D` once, then re-render to the same buffer every frame. The `label.repaint()` call tells Swing to redraw from the same image. This avoids creating thousands of string objects per frame (the text rendering approach) and produces a much cleaner visual.
 
-**Recursion depth.** `stepCell` recurses 625 times per frame, `renderRow` recurses 25 times per row (625 total via `renderGrid`), and `copyGrid` recurses 625 times. That's ~2000 recursive calls per frame. The JVM's default stack size handles this comfortably. For larger grids, you might hit stack overflow -- but 25x25 is well within limits.
+**Recursion depth.** `stepCell` recurses once per cell per frame, `renderCell` also recurses once per cell, and `copyGrid` does the same. For a 25x25 grid, that's ~1900 recursive calls per frame. The JVM's default stack handles this fine. For a 50x50 grid (2500 cells), it's ~7500 calls -- still within limits.
 
-**No tail call optimization.** The JVM doesn't optimize tail calls, so each recursive call does consume a stack frame. A future LASM optimization could detect tail-recursive functions and compile them to loops.
+**No tail call optimization.** The JVM doesn't optimize tail calls, so each recursive call consumes a stack frame. A future LASM optimization could detect tail-recursive functions and compile them to loops.
 
 **Double buffering matters.** Without separate `current` and `next` arrays, updating a cell would affect its neighbors' calculations in the same generation. The copy-back step (`copyGrid`) ensures each generation is computed from a consistent snapshot.
+
+**Java interop unlocks everything.** The entire graphics pipeline -- `BufferedImage`, `Graphics2D`, `ImageIcon`, `JOptionPane` -- comes from Java's standard library. LASM just calls it. No bindings, no FFI, no wrappers. Every Java class is available directly.
