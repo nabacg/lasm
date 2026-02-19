@@ -157,5 +157,6 @@
          :body
          [[:int {:value 4}]
           [:call-fn [:Fib/invoke [:int] :int]]
-          [:print]]}],
+          [:print]
+          [:pop]]}],
        :entry-point "Main_AAA"})))
