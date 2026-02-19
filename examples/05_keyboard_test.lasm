@@ -1,0 +1,32 @@
+fn testKeyboard(): int => {
+  frame:javax.swing.JFrame = new javax.swing.JFrame("Keyboard Test")
+  label:javax.swing.JLabel = new javax.swing.JLabel("Press keys...")
+  font:java.awt.Font = new java.awt.Font("Courier New", 1, 24)
+  label.setFont(font)
+  frame.add(label)
+  d:java.awt.Dimension = new java.awt.Dimension(600, 200)
+  frame.setSize(d)
+
+  keyListener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
+    keyPressed(e:java.awt.event.KeyEvent): void => {
+      code:int = e.getKeyCode()
+      printstr("Key pressed!")
+      printint(code)
+    }
+    keyReleased(e:java.awt.event.KeyEvent): void => {
+      printstr("Key released")
+    }
+    keyTyped(e:java.awt.event.KeyEvent): void => {
+      printstr("Key typed")
+    }
+  }
+
+  frame.addKeyListener(keyListener)
+  frame.setVisible(true)
+  printstr("Window created! Click it and press keys")
+  printstr("Up Arrow: 38, Down Arrow: 40")
+  printstr("W: 87, S: 83")
+  42
+}
+
+testKeyboard()

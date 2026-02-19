@@ -1,18 +1,25 @@
 # lasm
 
-A small functional language that compiles to JVM bytecode
+A small functional language that compiles to JVM bytecode.
 
-## Overview
+## Demo: Pong
 
-Lasm is a statically-typed functional programming language that compiles directly to JVM bytecode. It features seamless Java interoperability, strong typing, and a clean, expression-based syntax.
+A fully playable Pong game written in ~200 lines of lasm, compiled to a standalone JAR with zero runtime dependencies.
+
+```bash
+clj -M -m lasm.cli compile examples/06_pong_full_game.lasm -o pong.jar
+java -jar pong.jar
+```
+
+**Controls:** W/S = left paddle, Up/Down arrows = right paddle
 
 ## Features
 
-- 🔧 **JVM Bytecode Compilation** - Compiles directly to bytecode using ASM
-- ☕ **Java Interop** - Call any Java library, create objects, invoke methods
-- 🎯 **Strong Typing** - Static type checking with type inference
-- 🔄 **Functional** - Immutable variables, expression-based, pure functions
-- 📦 **Simple Syntax** - Clean and readable syntax inspired by modern functional languages
+- **JVM Bytecode Compilation** - Compiles directly to bytecode using ASM
+- **Java Interop** - Call any Java library, create objects, invoke methods
+- **Strong Typing** - Static type checking with type annotations
+- **Proxy Classes** - Implement Java interfaces with closure capture
+- **Standalone JARs** - Compile to runnable JAR files (no runtime dependencies)
 
 ## Quick Examples
 
@@ -23,12 +30,11 @@ printstr("Hello World!")
 
 ### Functions
 ```lasm
-fn factorial(n: int): int => {
-    if n <= 1
-        1
-    else
-        n * factorial(n - 1)
-}
+fn factorial(n: int): int =>
+  if n <= 1
+    1
+  else
+    n * factorial(n - 1)
 
 printint(factorial(5))
 ```
@@ -43,23 +49,54 @@ frame.pack()
 frame.setVisible(true)
 ```
 
+### Event Handling with Proxies
+```lasm
+listener:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
+  actionPerformed(e:java.awt.event.ActionEvent): void => {
+    label.setText("Clicked!")
+  }
+}
+```
+
 ## Examples
 
-Check out the [`examples/`](examples/) directory for complete examples including:
-- Simple window creation
-- GUI applications with Swing
-- **Pong game demo** - A complete game showcasing the language
-- Game logic and physics simulation
+See [`examples/`](examples/) for the full progression from hello-window to Pong:
 
-See [examples/README.md](examples/README.md) for detailed documentation.
+| # | File | Description |
+|---|------|-------------|
+| 01 | `01_simple_window.lasm` | Empty JFrame window |
+| 02 | `02_window_with_label.lasm` | Window with JLabel |
+| 03 | `03_pong.lasm` | Static Pong layout with functions |
+| 04 | `04_animated_pong.lasm` | Timer-based animation with ActionListener proxy |
+| 05 | `05_keyboard_test.lasm` | KeyListener with 3-method proxy |
+| 06 | `06_pong_full_game.lasm` | Playable Pong: keyboard input, ball physics, collision detection, scoring |
+
+## Usage
+
+### Compile to JAR
+```bash
+clj -M -m lasm.cli compile examples/06_pong_full_game.lasm -o pong.jar
+java -jar pong.jar
+```
+
+### Run directly (no JAR)
+```bash
+clj -M -m lasm.cli run examples/04_animated_pong.lasm
+```
+
+### Parse / inspect AST
+```bash
+clj -M -m lasm.cli parse examples/01_simple_window.lasm
+clj -M -m lasm.cli ast examples/01_simple_window.lasm
+```
 
 ## Language Syntax
 
 ### Variables
 ```lasm
-x: int = 42
-name: string = "Alice"
-flag: bool = true
+x:int = 42
+name:string = "Alice"
+flag:bool = true
 ```
 
 ### Functions
@@ -67,17 +104,27 @@ flag: bool = true
 fn add(x: int, y: int): int => x + y
 
 fn greet(name: string): string => {
-    "Hello, ".concat(name)
+  "Hello, ".concat(name)
 }
 ```
 
 ### Conditionals
 ```lasm
-fn max(a: int, b: int): int => {
-    if a > b
-        a
-    else
-        b
+fn max(a: int, b: int): int =>
+  if a > b
+    a
+  else
+    b
+```
+
+Block syntax in if/else:
+```lasm
+if code == 87 {
+  x = x + 1
+  setArrayElement(arr, 0, x)
+} else {
+  x = x - 1
+  setArrayElement(arr, 0, x)
 }
 ```
 
@@ -85,58 +132,69 @@ fn max(a: int, b: int): int => {
 
 **Create objects:**
 ```lasm
-frame: javax.swing.JFrame = new javax.swing.JFrame("Title")
+frame:javax.swing.JFrame = new javax.swing.JFrame("Title")
 ```
 
 **Instance methods:**
 ```lasm
-result: string = text.toUpperCase()
+result:string = text.toUpperCase()
 ```
 
 **Static methods:**
 ```lasm
-absValue: int = java.lang.Math/abs(-42)
+absValue:int = java.lang.Math/abs(42)
 ```
 
-## Project Structure
-
+**Static fields and null:**
+```lasm
+intType:java.lang.Class = java.lang.Integer/TYPE
+panel.setLayout(java.lang.Object/null)
 ```
-lasm/
-├── src/lasm/
-│   ├── parser.clj      # Parser using Instaparse
-│   ├── ast.clj         # AST transformations and IR generation
-│   ├── emit.clj        # JVM bytecode emission using ASM
-│   ├── type-checker.clj # Type checking and inference
-│   └── decompiler.clj  # Debug utilities
-├── examples/           # Example lasm programs
-│   ├── 01_simple_window.lasm
-│   ├── 02_window_with_label.lasm
-│   ├── 03_pong.lasm
-│   ├── 04_pong_with_logic.lasm
-│   └── README.md
-└── README.md
+
+### Proxy Classes
+Implement Java interfaces with closure capture:
+```lasm
+keyListener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
+  keyPressed(e:java.awt.event.KeyEvent): void => { printstr("pressed") }
+  keyReleased(e:java.awt.event.KeyEvent): void => { printstr("released") }
+  keyTyped(e:java.awt.event.KeyEvent): void => { printstr("typed") }
+}
 ```
 
 ## How It Works
 
 1. **Parse** - Source code is parsed into a parse tree using Instaparse
 2. **AST** - Parse tree is transformed into an Abstract Syntax Tree
-3. **Type Check** - Types are inferred and checked for correctness
-4. **IR** - AST is lowered to an intermediate representation
+3. **Type Check** - Types are checked via bidirectional type checking
+4. **IR** - AST is lowered to a stack-based intermediate representation
 5. **Emit** - IR is compiled to JVM bytecode using the ASM library
-6. **Load** - Bytecode is loaded into the JVM and executed
+6. **Load/Package** - Bytecode is loaded for execution or packaged into a JAR
+
+## Project Structure
+
+```
+lasm/
+├── src/lasm/
+│   ├── parser.clj       # Instaparse grammar and AST transformation
+│   ├── ast.clj          # AST-to-IR conversion, type environment
+│   ├── type_checker.clj # Bidirectional type checking
+│   ├── emit.clj         # JVM bytecode emission via ASM
+│   ├── jar.clj          # Standalone JAR compilation
+│   ├── cli.clj          # CLI interface (run, compile, parse, ast)
+│   └── decompiler.clj   # Debug: bytecode disassembly
+├── test/lasm/           # Test suite
+├── examples/            # Example programs (01-06)
+└── bin/lasmc            # Shell wrapper for compiler
+```
 
 ## Development
 
-### Running Examples
+### Running Tests
 ```bash
-# Using Clojure REPL
-clojure -M -m lasm.parser
-
-# Then in the REPL, run examples from parser.clj comments
+clj -M:test
 ```
 
-### Running from Source
+### REPL Usage
 ```clojure
 (require '[lasm.parser :as parser]
          '[lasm.ast :as ast]
@@ -154,30 +212,16 @@ clojure -M -m lasm.parser
 
 ### Type System
 - Primitives: `int`, `bool`, `string`, `void`
-- Java classes: Full Java type system available
-- Type inference for local variables
-- No implicit conversions
+- Java classes: Full Java type system via fully qualified names
+- Null: `java.lang.Object/null` conforms to any reference type
+- Type annotations required on variable declarations
+- Variable reassignment infers type from prior declaration
 
 ### Compilation Strategy
-- Functions compile to static methods on Java classes
-- Each function gets its own class
-- Main entry point is generated automatically
-- No garbage collection overhead (uses JVM GC)
-
-### Bytecode Generation
-- Uses ASM library for bytecode generation
-- Generates Java 8 compatible bytecode
-- Supports tail call optimization (where possible)
-- Stack-based VM instructions
-
-## Contributing
-
-Contributions are welcome! Areas for improvement:
-- More language features (arrays, structs, pattern matching)
-- Better error messages
-- Standard library
-- Package system
-- More examples
+- Functions compile to static methods on individual Java classes
+- Proxy classes implement interfaces with captured variable fields
+- Entry point class gets `main(String[])` for JAR execution
+- ASM is compile-time only - no runtime dependencies in JARs
 
 ## License
 

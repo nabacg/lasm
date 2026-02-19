@@ -14,6 +14,8 @@
                    :args args})))
 
 
+(declare map-ast-to-ir add-pop-if-needed needs-pop?)
+
 (defmulti ast-to-ir (fn [expr _]
                       (if (vector? expr)
                         (first expr)
@@ -79,10 +81,23 @@
                          :var-type (or var-type declared-type)}]]])))
 
 (defmethod ast-to-ir :VarDef [[_ {:keys [var-id var-type]} val-expr] tenv]
-  (let [[_ val-ir] (ast-to-ir val-expr tenv)]
+  (let [;; For reassignment (no type annotation), use existing type from env
+        var-type (or var-type (tenv var-id))
+        [_ val-ir] (ast-to-ir val-expr tenv)]
     [(assoc tenv var-id var-type)
      (conj val-ir
            [:def-local {:var-id var-id :var-type var-type}])]))
+
+(defmethod ast-to-ir :Block [[_ & exprs] tenv]
+  (reduce (fn [[env irs] [idx expr]]
+            (let [[env' ir] (ast-to-ir expr env)
+                  is-last? (= idx (dec (count exprs)))
+                  ir-with-pop (if is-last?
+                                ir
+                                (vec (add-pop-if-needed ir)))]
+              [env' (into irs ir-with-pop)]))
+          [tenv []]
+          (map-indexed vector exprs)))
 
 (defn resolve-cmp-type [arg0 arg1 tenv] ;;TODO Implement me
   :int)
@@ -108,7 +123,6 @@
        truthy-ir
        [[:label {:value exit-lbl}]]))]))
 
-(declare map-ast-to-ir)
 
 (defmethod ast-to-ir :StaticInteropCall [[_ {:keys [class-name method-name static?]} & method-args] tenv]  
   (let [{:keys [args return-type] :as env-type}  (tenv method-name)
@@ -208,13 +222,18 @@
         proxy-methods (mapv (fn [{:keys [method-name args return-type body]}]
                               (let [arg-types (mapv :type args)
                                     tenv-with-params (into tenv (map (juxt :id :type) args))
-                                    ;; Process method body - similar to FunDef
+                                    ;; Process method body - same as FunDef with POP handling
                                     [_ body-irs]
                                     (reduce (fn [[env irs] [idx expr]]
                                               (let [[env' ir] (ast-to-ir expr env)
-                                                    is-last? (= idx (dec (count body)))]
-                                                ;; Don't add POP for last expression (return value)
-                                                [env' (into irs ir)]))
+                                                    is-last? (= idx (dec (count body)))
+                                                    ;; For void methods, pop last expression too
+                                                    ir-with-pop (if (and is-last? (= return-type :void))
+                                                                  (vec (add-pop-if-needed ir))
+                                                                  (if is-last?
+                                                                    ir
+                                                                    (vec (add-pop-if-needed ir))))]
+                                                [env' (into irs ir-with-pop)]))
                                             [tenv-with-params []]
                                             (map-indexed vector body))]
                                 {:method-name method-name
@@ -257,6 +276,8 @@
                  (not= return-type :void))
       :static-interop-call (let [[_ [_ _ return-type]] ir-instruction]
                              (not= return-type :void))
+      :print-str true    ;; print-str leaves the string on the stack
+      :print true        ;; print leaves the int on the stack
       false)))
 
 (defn add-pop-if-needed [ir-seq]
@@ -277,9 +298,12 @@
                   (let [[env' ir] (ast-to-ir expr env)
                         ;; Add POP for non-last expressions that leave values
                         is-last? (= idx (dec (count body)))
-                        ir-with-pop (if is-last?
-                                      ir  ;; Last expression is the return value
-                                      (vec (add-pop-if-needed ir)))]
+                        ;; For void functions, pop last expression too
+                        ir-with-pop (if (and is-last? (= return-type :void))
+                                      (vec (add-pop-if-needed ir))
+                                      (if is-last?
+                                        ir  ;; Last expression is the return value
+                                        (vec (add-pop-if-needed ir))))]
                     [env' (into irs ir-with-pop)]))
                 [tenv-with-params []]
                 (map-indexed vector body))]

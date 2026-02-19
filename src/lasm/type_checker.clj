@@ -39,10 +39,17 @@
     :SubInt :int
     :MulInt :int
     :DivInt :int
+    :null   :null
     :VarRef  (if-let [var-type (tenv (:var-id (first exprs)))]
                var-type)
     :FunCall (if-let [{:keys [return-type]} (tenv (first exprs))]
                return-type)
+    :StaticFieldAccess (let [{:keys [class-name field-name]} (first exprs)]
+                         (if (and (= class-name "java.lang.Object") (= field-name "null"))
+                           :null
+                           (let [clazz (Class/forName class-name)
+                                 field (.getDeclaredField clazz field-name)]
+                             (jvm-type-to-ir (.getType field)))))
     :class expr))
 
 (defn get-class-ancestors [klass]
@@ -52,6 +59,8 @@
   (take-while #(not= % Object) (iterate #(.getSuperclass %) klass)))
 
 
+(def ^:private primitive-types #{'int 'long 'boolean 'byte 'short 'char 'float 'double})
+
 (defn can-conform-types? [param-class arg-expr tenv]
   (assert (symbol? param-class)
           "Param-class needs to be a symbol")
@@ -59,9 +68,14 @@
     (case arg-expr
           :bool (= param-class 'boolean)
           :int (= param-class 'int)
+          :null (not (contains? primitive-types param-class))
           false)
     (let [arg-type (ast-expr-to-ir-type arg-expr tenv)]
       (cond
+        ;; null conforms to any reference type
+        (= arg-type :null)
+        (not (contains? primitive-types param-class))
+
         (= param-class arg-type)
         true
         ;; Handle primitive type matching
@@ -197,7 +211,11 @@
 (defn check [{:keys [type expr env] :as ctx}]
   (case (first expr)
     :Int (matches-type :int ctx)
+    :Bool (matches-type :bool ctx)
     :VarRef (matches-type (synth ctx) ctx)
+    :AddInt (matches-type :int ctx)
+    :SubInt (matches-type :int ctx)
+    :MulInt (matches-type :int ctx)
     :DivInt (do
               ;; check all Argos
               (let [[_ & ops] expr]
@@ -209,6 +227,7 @@
     :String (matches-type :string ctx)
     :>  (matches-type :boolean ctx)
     :== (matches-type :boolean ctx)
+    :!= (matches-type :boolean ctx)
     :<  (matches-type :boolean ctx)
     :>= (matches-type :boolean ctx)
     :<= (matches-type :boolean ctx)
@@ -280,6 +299,8 @@
                  proxy-type [:class class-or-interface]]
              ;; TODO: validate that all required methods are implemented
              (matches-type proxy-type ctx))
+    :Block (let [block-type (synth ctx)]
+             (matches-type block-type ctx))
     (throw (ex-info "No matching check" {:expr expr :type type}))))
 
 
@@ -302,6 +323,7 @@
     :If (synth { :expr (last expr) :env env})
     :> :boolean
     :== :boolean
+    :!= :boolean
     :< :boolean
     :>= :boolean
     :<= :boolean
@@ -310,9 +332,11 @@
               (throw (ex-info "Unknown Variable found" {:var-id (:var-id (second expr))
                                                         :expr expr
                                                         :env env})))
-    :VarDef (let [[_ {:keys [var-type]}] expr]
-              (if (not (nil? var-type))
-                var-type
+    :VarDef (let [[_ {:keys [var-id var-type]}] expr
+                  ;; For reassignment (no type annotation), look up existing type
+                  resolved-type (or var-type (env var-id))]
+              (if (not (nil? resolved-type))
+                resolved-type
                 (throw (ex-info "VarDef with unknown type, expected :var-type prop to be not empty"
                                 {:expr expr
                                  :env env}))))
@@ -337,13 +361,22 @@
     :StaticInteropCall (let [[_ {:keys [class-name method-name]} & method-args] expr
                              method-sig (lookup-interop-method-signature class-name method-name method-args true env)]
                          (:return-type method-sig))
-    :StaticFieldAccess (let [[_ {:keys [class-name field-name]}] expr
-                             clazz (Class/forName class-name)
-                             field (.getDeclaredField clazz field-name)
-                             field-type (.getType field)]
-                         (jvm-type-to-ir field-type))
+    :StaticFieldAccess (let [[_ {:keys [class-name field-name]}] expr]
+                         (if (and (= class-name "java.lang.Object") (= field-name "null"))
+                           :null
+                           (let [clazz (Class/forName class-name)
+                                 field (.getDeclaredField clazz field-name)
+                                 field-type (.getType field)]
+                             (jvm-type-to-ir field-type))))
     :Proxy (let [[_ {:keys [class-or-interface]}] expr]
              [:class class-or-interface])
+    :Block (let [[_ & block-exprs] expr
+                 ;; Thread env through block to handle VarDefs
+                 [final-env _] (reduce (fn [[env' _] sub-expr]
+                                         (augment {:env env' :expr sub-expr}))
+                                       [env nil]
+                                       block-exprs)]
+             (synth {:expr (last block-exprs) :env final-env}))
     (throw (ex-info "No Matching synth" {:expr expr :env env}))))
 
 ;; ctx -> expr
@@ -406,7 +439,10 @@
       (check {:expr expr :env env :type ctor-type})
       [env expr])
     :VarDef
-    (let [[_ {:keys [var-id var-type] :as metadata} init-expr] expr]
+    (let [[_ {:keys [var-id var-type] :as metadata} init-expr] expr
+          ;; For reassignment (no type annotation), use existing type from env
+          var-type (or var-type (env var-id))
+          metadata (assoc metadata :var-type var-type)]
       (if init-expr
         ;; If there's an initializer, augment it, then add var to env
         (let [[env' augmented-init] (augment (assoc ctx :expr init-expr))
@@ -430,6 +466,12 @@
     (let [proxy-type (synth {:expr expr :env env})]
       (check {:expr expr :env env :type proxy-type})
       [env expr])
+    :Block
+    (let [[_ & block-exprs] expr]
+      (reduce (fn [[env' _] sub-expr]
+                (augment {:env env' :expr sub-expr}))
+              [env nil]
+              block-exprs))
     ;; Default case: reconstruct expression with augmented sub-expressions
     [env (into [(first expr)]
                (mapv (augment-sub-expr ctx)

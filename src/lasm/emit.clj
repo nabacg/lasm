@@ -10,6 +10,9 @@
 
 (def INIT (Method/getMethod "void <init>()"))
 
+;; Accumulates proxy class bytecodes during compilation (for JAR packaging)
+(def ^:dynamic *proxy-bytecodes* nil)
+
 (defn resolve-type [expr-type]
   (cond
     (= Type (type expr-type))  ;;if expr is already of asm.Type
@@ -151,10 +154,16 @@
 
 (defn emit-with-env [^GeneratorAdapter ga env [cmd-type cmd :as c]]
   (case cmd-type
-    :def-local (let [{:keys [value var-type var-id]} cmd
-                     var-handle (.newLocal ga (resolve-type var-type))]
-                 (.storeLocal ga var-handle)
-                 (assoc env var-id var-handle))
+    :def-local (let [{:keys [var-type var-id]} cmd
+                     existing-handle (get env var-id)]
+                 (if (and existing-handle (number? existing-handle))
+                   ;; Reassignment - reuse existing local variable slot
+                   (do (.storeLocal ga existing-handle)
+                       env)
+                   ;; New variable - allocate new local slot
+                   (let [var-handle (.newLocal ga (resolve-type var-type))]
+                     (.storeLocal ga var-handle)
+                     (assoc env var-id var-handle))))
     :ref-local (let [var-id (:var-id cmd)
                      var-info (env var-id)]
                  (if (and (map? var-info) (:field var-info))
@@ -296,40 +305,72 @@
 
     (.visitEnd writer)
 
-    ;; Define the class
-    (.defineClass ^clojure.lang.DynamicClassLoader
-                  (clojure.lang.DynamicClassLoader.)
-                  (.replace ^String class-name \/ \.)
-                  (.toByteArray ^ClassWriter writer) nil)
+    (let [bytecode (.toByteArray ^ClassWriter writer)]
+      ;; Collect proxy bytecode for JAR packaging
+      (when *proxy-bytecodes*
+        (swap! *proxy-bytecodes* assoc class-name bytecode))
 
-    (decomp/to-bytecode (.toByteArray ^ClassWriter  writer) class-name)
+      ;; Define the class for immediate execution
+      (.defineClass ^clojure.lang.DynamicClassLoader
+                    (clojure.lang.DynamicClassLoader.)
+                    (.replace ^String class-name \/ \.)
+                    bytecode nil)
 
-    class-name))
+      (decomp/to-bytecode bytecode class-name)
+
+      class-name)))
 
 ;(require '[lasm.decompiler :as decomp])
 
-(defn make-fn [{:keys [class-name body] :as fn-definition}]
+(defn make-fn-bytecode
+  "Generate bytecode for a function without loading it into the classloader.
+   Returns the bytecode as a byte array."
+  [{:keys [class-name body] :as fn-definition}]
   (let [writer (ClassWriter. ClassWriter/COMPUTE_FRAMES)
         body   (if (= :return (first (last body))) body (conj body [:return]))]
-
-    (println "make-fn name=" class-name " body=")
-    (pprint/pprint body)
     (initialize-class writer class-name)
-
     (generate-default-ctor writer)
     (make-static-method writer "invoke" (assoc fn-definition :body body))
     (.visitEnd writer)
+    (.toByteArray ^ClassWriter writer)))
+
+(defn make-fn
+  "Compile a function and load it into the classloader for immediate execution."
+  [{:keys [class-name body] :as fn-definition}]
+  (let [bytecode (make-fn-bytecode fn-definition)]
+    (println "make-fn name=" class-name " body=")
+    (pprint/pprint body)
     (.defineClass ^clojure.lang.DynamicClassLoader
                   (clojure.lang.DynamicClassLoader.)
                   (.replace ^String class-name \/ \.)
-                  (.toByteArray ^ClassWriter writer) nil)
-    (decomp/to-bytecode (.toByteArray ^ClassWriter  writer)
-                       class-name)
-
-    #_(decomp/to-java (.toByteArray ^ClassWriter  writer)
-                    class-name)
+                  bytecode nil)
+    (decomp/to-bytecode bytecode class-name)
     class-name))
 
+
+(defn make-fn-bytecode-with-main
+  "Generate bytecode with both invoke() and main(String[]) methods.
+   Used for JAR entry point classes."
+  [{:keys [class-name body] :as fn-definition}]
+  (let [writer (ClassWriter. ClassWriter/COMPUTE_FRAMES)
+        body   (if (= :return (first (last body))) body (conj body [:return]))]
+    (initialize-class writer class-name)
+    (generate-default-ctor writer)
+    (make-static-method writer "invoke" (assoc fn-definition :body body))
+    ;; Generate main(String[] args) that delegates to invoke()
+    (let [main-method (Method. "main" Type/VOID_TYPE
+                               (into-array Type [(Type/getType (Class/forName "[Ljava.lang.String;"))]))
+          ga (GeneratorAdapter. (int (+ Opcodes/ACC_PUBLIC Opcodes/ACC_STATIC)) main-method nil nil writer)]
+      (.invokeStatic ga (Type/getObjectType class-name)
+                     (Method. "invoke" (resolve-type (:return-type fn-definition))
+                              (into-array Type [])))
+      ;; Pop return value if non-void
+      (when (not= :void (:return-type fn-definition))
+        (.pop ga))
+      (.returnValue ga)
+      (.endMethod ^GeneratorAdapter ga))
+    (.visitEnd writer)
+    (.toByteArray ^ClassWriter writer)))
 
 (defn make-entry-point [class-name code]
   (make-fn {:class-name class-name

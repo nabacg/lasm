@@ -9,6 +9,8 @@
 Prog := wc TopLevelExpr (ws expr-delim+ ws TopLevelExpr)* wc
 <TopLevelExpr> := FunDefExpr | FunCallExpr | VarDefExpr | InteropCallExpr | StaticInteropCallExpr | StaticFieldAccessExpr | CtorInteropExpr | ProxyExpr
 <Expr> := TopLevelExpr | BoolExpr | StringExpr | NumExpr | VarExpr | IfExpr | BinOpExpr | EqOpExpr
+BlockExpr := <'{'> wc Expr (wc expr-delim+ wc Expr)* wc <'}'>
+<IfBranch> := BlockExpr | Expr
 <expr-delim> := <';'> | newline
 <newline> := <'\n'>
 <ws> := <' '>*
@@ -22,7 +24,7 @@ StringExpr := <'\"'> #'[.[^\"]]*' <'\"'>
 NumExpr := #'[0-9]+'
 BoolExpr := 'true' | 'false'
 VarDefExpr := VarExpr ws <'='> ws Expr
-IfExpr := <'if'> ws EqOpExpr wc  Expr wc <'else'> wc Expr wc
+IfExpr := <'if'> ws EqOpExpr wc  IfBranch wc <'else'> wc IfBranch wc
 BinOpExpr  := Expr ws BinOp ws Expr
 EqOpExpr  := Expr ws EqOp ws Expr
 BinOp :=  '+' | '-' | '/' | '*'
@@ -31,14 +33,15 @@ EqOp := '>' | '<' | '>=' | '<=' | '==' | '!='
 FunDefExpr := <'fn'> ws symbol ws<'('> ws params ws  <')'> TypeAnnotation ws <'=>'> ws body
 TypeExpr := 'bool' | 'string' | 'int' | 'void' | fullyQualifiedType
 params := VarExpr? (ws <','> ws VarExpr)*
-body := <'{'>?  wc Expr ws (expr-delim ws Expr)* wc <'}'>?
+body := <'{'> wc Expr (wc expr-delim+ wc Expr)* wc <'}'> | wc Expr ws (expr-delim ws Expr)*
+proxy-body := <'{'> wc Expr (wc expr-delim+ wc Expr)* wc <'}'>
 FunCallExpr := symbol  <'('> comma-delimited-exprs? <')'>
 StaticInteropCallExpr := fullyQualifiedType<'/'>symbol <'('> comma-delimited-exprs? <')'>
 StaticFieldAccessExpr := fullyQualifiedType<'/'>symbol
 InteropCallExpr := ( StringExpr | VarExpr | FunCallExpr )<'.'>symbol<'('> comma-delimited-exprs? <')'>
 CtorInteropExpr := 'new' ws fullyQualifiedType<'('> comma-delimited-exprs? <')'>
-ProxyExpr := <'proxy'> ws fullyQualifiedType ws <'{'> wc ProxyMethod+ wc <'}'>
-ProxyMethod := symbol ws <'('> ws params ws <')'> TypeAnnotation ws <'=>'> ws body"))
+ProxyExpr := <'proxy'> ws fullyQualifiedType ws <'{'> wc ProxyMethod (wc ProxyMethod)* wc <'}'>
+ProxyMethod := symbol ws <'('> ws params ws <')'> TypeAnnotation ws <'=>'> ws proxy-body"))
 
 
 
@@ -141,6 +144,9 @@ ProxyMethod := symbol ws <'('> ws params ws <')'> TypeAnnotation ws <'=>'> ws bo
   [:StaticFieldAccess
    {:class-name class-name
     :field-name field-name}])
+
+(defmethod trans-to-ast :BlockExpr [[_ & exprs]]
+  (into [:Block] (mapv trans-to-ast exprs)))
 
 (defmethod trans-to-ast :ProxyMethod [[_ method-name params-node return-type body-node]]
   (let [[_ & params] params-node
