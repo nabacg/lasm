@@ -1,0 +1,285 @@
+fn createIntArray(size: int): java.lang.Object => {
+  intType:java.lang.Class = java.lang.Integer/TYPE
+  java.lang.reflect.Array/newInstance(intType, size)
+}
+
+fn getArrayElement(arr: java.lang.Object, index: int): int => {
+  java.lang.reflect.Array/getInt(arr, index)
+}
+
+fn setArrayElement(arr: java.lang.Object, index: int, value: int): void => {
+  java.lang.reflect.Array/setInt(arr, index, value)
+}
+
+fn getCell(grid: java.lang.Object, row: int, col: int, rows: int, cols: int): int => {
+  if row < 0
+    0
+  else
+    if row >= rows
+      0
+    else
+      if col < 0
+        0
+      else
+        if col >= cols
+          0
+        else {
+          idx:int = row * cols
+          cellIdx:int = idx + col
+          getArrayElement(grid, cellIdx)
+        }
+}
+
+fn countNeighbors(grid: java.lang.Object, row: int, col: int, rows: int, cols: int): int => {
+  rm1:int = row - 1
+  rp1:int = row + 1
+  cm1:int = col - 1
+  cp1:int = col + 1
+  n1:int = getCell(grid, rm1, cm1, rows, cols)
+  n2:int = getCell(grid, rm1, col, rows, cols)
+  n3:int = getCell(grid, rm1, cp1, rows, cols)
+  n4:int = getCell(grid, row, cm1, rows, cols)
+  n5:int = getCell(grid, row, cp1, rows, cols)
+  n6:int = getCell(grid, rp1, cm1, rows, cols)
+  n7:int = getCell(grid, rp1, col, rows, cols)
+  n8:int = getCell(grid, rp1, cp1, rows, cols)
+  s1:int = n1 + n2
+  s2:int = s1 + n3
+  s3:int = s2 + n4
+  s4:int = s3 + n5
+  s5:int = s4 + n6
+  s6:int = s5 + n7
+  s6 + n8
+}
+
+fn stepCell(current: java.lang.Object, next: java.lang.Object, i: int, total: int, rows: int, cols: int): void => {
+  if i < total {
+    row:int = i / cols
+    rc:int = row * cols
+    col:int = i - rc
+    neighbors:int = countNeighbors(current, row, col, rows, cols)
+    alive:int = getArrayElement(current, i)
+
+    if alive == 1 {
+      if neighbors == 2 {
+        setArrayElement(next, i, 1)
+      } else {
+        if neighbors == 3 {
+          setArrayElement(next, i, 1)
+        } else {
+          setArrayElement(next, i, 0)
+        }
+      }
+    } else {
+      if neighbors == 3 {
+        setArrayElement(next, i, 1)
+      } else {
+        setArrayElement(next, i, 0)
+      }
+    }
+
+    nextI:int = i + 1
+    stepCell(current, next, nextI, total, rows, cols)
+  } else {
+    setArrayElement(next, 0, getArrayElement(next, 0))
+  }
+}
+
+fn copyGrid(src: java.lang.Object, dst: java.lang.Object, i: int, total: int): void => {
+  if i < total {
+    val:int = getArrayElement(src, i)
+    setArrayElement(dst, i, val)
+    nextI:int = i + 1
+    copyGrid(src, dst, nextI, total)
+  } else {
+    setArrayElement(dst, 0, getArrayElement(dst, 0))
+  }
+}
+
+fn clearGrid(grid: java.lang.Object, i: int, total: int): void => {
+  if i < total {
+    setArrayElement(grid, i, 0)
+    nextI:int = i + 1
+    clearGrid(grid, nextI, total)
+  } else {
+    setArrayElement(grid, 0, 0)
+  }
+}
+
+fn randomizeGrid(grid: java.lang.Object, rng: java.util.Random, i: int, total: int): void => {
+  if i < total {
+    val:int = rng.nextInt(4)
+    if val == 0 {
+      setArrayElement(grid, i, 1)
+    } else {
+      setArrayElement(grid, i, 0)
+    }
+    nextI:int = i + 1
+    randomizeGrid(grid, rng, nextI, total)
+  } else {
+    setArrayElement(grid, 0, getArrayElement(grid, 0))
+  }
+}
+
+fn addGlider(grid: java.lang.Object, startRow: int, startCol: int, cols: int): void => {
+  sc1:int = startCol + 1
+  sc2:int = startCol + 2
+  row1s:int = startRow * cols
+  i1:int = row1s + sc1
+  setArrayElement(grid, i1, 1)
+
+  sr1:int = startRow + 1
+  row2s:int = sr1 * cols
+  i2:int = row2s + sc2
+  setArrayElement(grid, i2, 1)
+
+  sr2:int = startRow + 2
+  row3s:int = sr2 * cols
+  i3:int = row3s + startCol
+  setArrayElement(grid, i3, 1)
+  i4:int = row3s + sc1
+  setArrayElement(grid, i4, 1)
+  i5:int = row3s + sc2
+  setArrayElement(grid, i5, 1)
+}
+
+fn renderRow(grid: java.lang.Object, rowStart: int, col: int, cols: int, acc: string): string => {
+  if col < cols {
+    idx:int = rowStart + col
+    cell:int = getArrayElement(grid, idx)
+    nextCol:int = col + 1
+    if cell == 1 {
+      newAcc:string = acc.concat("##")
+      renderRow(grid, rowStart, nextCol, cols, newAcc)
+    } else {
+      newAcc:string = acc.concat("  ")
+      renderRow(grid, rowStart, nextCol, cols, newAcc)
+    }
+  } else
+    acc
+}
+
+fn renderGrid(grid: java.lang.Object, row: int, rows: int, cols: int, acc: string): string => {
+  if row < rows {
+    rowStart:int = row * cols
+    rowStr:string = renderRow(grid, rowStart, 0, cols, "")
+    accRow:string = acc.concat(rowStr)
+    withNewline:string = accRow.concat("\n")
+    nextRow:int = row + 1
+    renderGrid(grid, nextRow, rows, cols, withNewline)
+  } else
+    acc
+}
+
+fn main(): int => {
+  rows:int = 25
+  cols:int = 25
+  total:int = 625
+
+  current:java.lang.Object = createIntArray(total)
+  next:java.lang.Object = createIntArray(total)
+  pauseFlag:java.lang.Object = createIntArray(1)
+  genCount:java.lang.Object = createIntArray(1)
+
+  setArrayElement(pauseFlag, 0, 0)
+  setArrayElement(genCount, 0, 0)
+
+  rng:java.util.Random = new java.util.Random()
+  randomizeGrid(current, rng, 0, total)
+
+  frame:javax.swing.JFrame = new javax.swing.JFrame("LASM - Game of Life")
+  black:java.awt.Color = new java.awt.Color(0, 0, 0)
+  green:java.awt.Color = new java.awt.Color(0, 200, 0)
+
+  textArea:javax.swing.JTextArea = new javax.swing.JTextArea(25, 50)
+  monoFont:java.awt.Font = new java.awt.Font("Monospaced", 1, 14)
+  textArea.setFont(monoFont)
+  textArea.setEditable(false)
+  textArea.setFocusable(false)
+  textArea.setBackground(black)
+  textArea.setForeground(green)
+
+  gridStr:string = renderGrid(current, 0, rows, cols, "")
+  textArea.setText(gridStr)
+
+  frame.add(textArea)
+  d:java.awt.Dimension = new java.awt.Dimension(460, 430)
+  frame.setSize(d)
+  frame.setDefaultCloseOperation(3)
+
+  keyListener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
+    keyPressed(e:java.awt.event.KeyEvent): void => {
+      code:int = e.getKeyCode()
+
+      if code == 32 {
+        p:int = getArrayElement(pauseFlag, 0)
+        if p == 0 {
+          setArrayElement(pauseFlag, 0, 1)
+        } else {
+          setArrayElement(pauseFlag, 0, 0)
+        }
+      } else {
+        if code == 82 {
+          randomizeGrid(current, rng, 0, total)
+          setArrayElement(genCount, 0, 0)
+          setArrayElement(pauseFlag, 0, 0)
+        } else {
+          if code == 67 {
+            clearGrid(current, 0, total)
+            setArrayElement(genCount, 0, 0)
+          } else {
+            if code == 71 {
+              addGlider(current, 2, 2, cols)
+            } else {
+              setArrayElement(pauseFlag, 0, getArrayElement(pauseFlag, 0))
+            }
+          }
+        }
+      }
+    }
+    keyReleased(e:java.awt.event.KeyEvent): void => {
+      printstr("")
+    }
+    keyTyped(e:java.awt.event.KeyEvent): void => {
+      printstr("")
+    }
+  }
+
+  frame.addKeyListener(keyListener)
+
+  timerListener:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
+    actionPerformed(e:java.awt.event.ActionEvent): void => {
+      paused:int = getArrayElement(pauseFlag, 0)
+
+      if paused == 0 {
+        stepCell(current, next, 0, total, rows, cols)
+        copyGrid(next, current, 0, total)
+        gen:int = getArrayElement(genCount, 0)
+        newGen:int = gen + 1
+        setArrayElement(genCount, 0, newGen)
+      } else {
+        setArrayElement(pauseFlag, 0, getArrayElement(pauseFlag, 0))
+      }
+
+      gridStr:string = renderGrid(current, 0, rows, cols, "")
+      textArea.setText(gridStr)
+
+      g:int = getArrayElement(genCount, 0)
+      genStr:string = java.lang.String/valueOf(g)
+      titleBase:string = "Game of Life  Gen: "
+      newTitle:string = titleBase.concat(genStr)
+      frame.setTitle(newTitle)
+    }
+  }
+
+  timerObj:javax.swing.Timer = new javax.swing.Timer(150, timerListener)
+  timerObj.start()
+
+  frame.setVisible(true)
+  frame.requestFocus()
+  printstr("LASM - Game of Life")
+  printstr("Controls: SPACE=pause  R=randomize  C=clear  G=add glider")
+  42
+}
+
+main()

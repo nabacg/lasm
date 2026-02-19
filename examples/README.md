@@ -1,6 +1,6 @@
 # LASM Examples
 
-A progression from "open a window" to a fully playable Pong game.
+A progression from "open a window" to fully playable games.
 
 ## Examples
 
@@ -12,6 +12,7 @@ A progression from "open a window" to a fully playable Pong game.
 | 04 | `04_animated_pong.lasm` | Animated label with timer | ActionListener proxy, closure capture |
 | 05 | `05_keyboard_test.lasm` | Keyboard event handler | 3-method KeyListener proxy |
 | 06 | `06_pong_full_game.lasm` | Playable Pong game | Null layout, setBounds, physics, scoring |
+| 07 | `07_game_of_life.lasm` | Conway's Game of Life | Recursive iteration, text rendering, double buffering |
 
 ## Running
 
@@ -42,3 +43,17 @@ The Pong game demonstrates most of lasm's features in ~200 lines:
 - **Up / Down arrows** - Move right paddle up/down
 - Ball bounces off walls and paddles
 - Score updates when ball passes a paddle
+
+## Game of Life (07)
+
+Conway's Game of Life on a 25x25 grid, rendered as text in a JTextArea:
+- **Recursive iteration** - no loops, all iteration via tail-recursive functions
+- **Double buffering** - current and next grid arrays, copy after each step
+- **Text rendering** - builds display string recursively, `##` for alive cells
+- **Multiple controls** via KeyListener proxy
+
+### Controls
+- **SPACE** - Pause/resume
+- **R** - Randomize grid
+- **C** - Clear grid
+- **G** - Add a glider pattern

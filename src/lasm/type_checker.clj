@@ -203,7 +203,8 @@
 
 
 (defn augment-then-synth [ctx]
-  (synth (assoc ctx :expr (augment (dissoc ctx :type)))))
+  (let [[env' augmented-expr] (augment (dissoc ctx :type))]
+    (synth {:expr augmented-expr :env env'})))
 
 
 ;; ctx -> ctx
@@ -244,8 +245,10 @@
           (matches-type truthy-type (assoc ctx :expr truthy))
           (matches-type falsy-type (assoc ctx :expr falsy)))
     
-    :FunDef (let [[_ {:keys [args return-type]} & body] expr
-                  env' (into env (map (juxt :id :type) args)) ;; extend the env with params
+    :FunDef (let [[_ {:keys [fn-name args return-type]} & body] expr
+                  arg-types (mapv :type args)
+                  env' (-> (into env (map (juxt :id :type) args)) ;; extend the env with params
+                           (assoc fn-name {:args arg-types :return-type return-type})) ;; add self for recursion
                   ;; Thread environment through body expressions
                   [final-env augmented-body]
                   (reduce (fn [[acc-env acc-exprs] e]
@@ -467,11 +470,14 @@
       (check {:expr expr :env env :type proxy-type})
       [env expr])
     :Block
-    (let [[_ & block-exprs] expr]
-      (reduce (fn [[env' _] sub-expr]
-                (augment {:env env' :expr sub-expr}))
-              [env nil]
-              block-exprs))
+    (let [[_ & block-exprs] expr
+          [final-env augmented-exprs]
+          (reduce (fn [[env' acc] sub-expr]
+                    (let [[new-env aug-expr] (augment {:env env' :expr sub-expr})]
+                      [new-env (conj acc aug-expr)]))
+                  [env []]
+                  block-exprs)]
+      [final-env (into [:Block] augmented-exprs)])
     ;; Default case: reconstruct expression with augmented sub-expressions
     [env (into [(first expr)]
                (mapv (augment-sub-expr ctx)

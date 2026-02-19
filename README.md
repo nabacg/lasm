@@ -60,7 +60,7 @@ listener:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
 
 ## Examples
 
-See [`examples/`](examples/) for the full progression from hello-window to Pong:
+See [`examples/`](examples/) for the full progression from hello-window to games:
 
 | # | File | Description |
 |---|------|-------------|
@@ -70,6 +70,13 @@ See [`examples/`](examples/) for the full progression from hello-window to Pong:
 | 04 | `04_animated_pong.lasm` | Timer-based animation with ActionListener proxy |
 | 05 | `05_keyboard_test.lasm` | KeyListener with 3-method proxy |
 | 06 | `06_pong_full_game.lasm` | Playable Pong: keyboard input, ball physics, collision detection, scoring |
+| 07 | `07_game_of_life.lasm` | Conway's Game of Life: recursive iteration, text rendering, double buffering |
+
+## Tutorials
+
+- [Getting Started](docs/tutorial-hello-world.md) -- variables, functions, conditionals, Java interop, basic GUI
+- [Building Pong](docs/tutorial-pong.md) -- mutable state via arrays, null layout, keyboard input, game loop
+- [Building Game of Life](docs/tutorial-game-of-life.md) -- recursive grid traversal, text rendering, double buffering
 
 ## Usage
 
