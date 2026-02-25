@@ -1,0 +1,410 @@
+fn createIntArray(size: int): java.lang.Object => {
+  intType:java.lang.Class = java.lang.Integer/TYPE
+  java.lang.reflect.Array/newInstance(intType, size)
+}
+
+fn getArrayElement(arr: java.lang.Object, index: int): int => {
+  java.lang.reflect.Array/getInt(arr, index)
+}
+
+fn setArrayElement(arr: java.lang.Object, index: int, value: int): void => {
+  java.lang.reflect.Array/setInt(arr, index, value)
+}
+
+fn modulo(a: int, b: int): int => {
+  d:int = a / b
+  m:int = d * b
+  a - m
+}
+
+fn computeDir(currentDir: int, keyCode: int): int => {
+  if keyCode == 38 {
+    if currentDir == 2
+      currentDir
+    else
+      0
+  } else {
+    if keyCode == 39 {
+      if currentDir == 3
+        currentDir
+      else
+        1
+    } else {
+      if keyCode == 40 {
+        if currentDir == 0
+          currentDir
+        else
+          2
+      } else {
+        if keyCode == 37 {
+          if currentDir == 1
+            currentDir
+          else
+            3
+        } else {
+          currentDir
+        }
+      }
+    }
+  }
+}
+
+fn computeHeadRow(headRow: int, dir: int, gridSize: int): int => {
+  if dir == 0 {
+    sum:int = headRow - 1
+    added:int = sum + gridSize
+    modulo(added, gridSize)
+  } else {
+    if dir == 2 {
+      sum:int = headRow + 1
+      modulo(sum, gridSize)
+    } else {
+      headRow
+    }
+  }
+}
+
+fn computeHeadCol(headCol: int, dir: int, gridSize: int): int => {
+  if dir == 1 {
+    sum:int = headCol + 1
+    modulo(sum, gridSize)
+  } else {
+    if dir == 3 {
+      sum:int = headCol - 1
+      added:int = sum + gridSize
+      modulo(added, gridSize)
+    } else {
+      headCol
+    }
+  }
+}
+
+fn didEatFood(hr: int, hc: int, foodRowArr: java.lang.Object, foodColArr: java.lang.Object): int => {
+  fr:int = getArrayElement(foodRowArr, 0)
+  fc:int = getArrayElement(foodColArr, 0)
+  if hr == fr {
+    if hc == fc
+      1
+    else
+      0
+  } else {
+    0
+  }
+}
+
+fn findFoodFrom(occupied: java.lang.Object, foodRowArr: java.lang.Object, foodColArr: java.lang.Object, pos: int, total: int, gridSize: int): void => {
+  wrapped:int = modulo(pos, total)
+  cellVal:int = getArrayElement(occupied, wrapped)
+  if cellVal == 1 {
+    tryNext:int = wrapped + 1
+    findFoodFrom(occupied, foodRowArr, foodColArr, tryNext, total, gridSize)
+  } else {
+    row:int = wrapped / gridSize
+    rc:int = row * gridSize
+    col:int = wrapped - rc
+    setArrayElement(foodRowArr, 0, row)
+    setArrayElement(foodColArr, 0, col)
+  }
+}
+
+fn placeFood(occupied: java.lang.Object, foodRowArr: java.lang.Object, foodColArr: java.lang.Object, rng: java.util.Random, gridSize: int): void => {
+  total:int = gridSize * gridSize
+  pos:int = rng.nextInt(total)
+  cellVal:int = getArrayElement(occupied, pos)
+  if cellVal == 1 {
+    tryNext:int = pos + 1
+    wrapped:int = modulo(tryNext, total)
+    findFoodFrom(occupied, foodRowArr, foodColArr, wrapped, total, gridSize)
+  } else {
+    row:int = pos / gridSize
+    rc:int = row * gridSize
+    col:int = pos - rc
+    setArrayElement(foodRowArr, 0, row)
+    setArrayElement(foodColArr, 0, col)
+  }
+}
+
+fn clearOccupied(occupied: java.lang.Object, i: int, total: int): void => {
+  if i < total {
+    setArrayElement(occupied, i, 0)
+    next:int = i + 1
+    clearOccupied(occupied, next, total)
+  } else {
+    setArrayElement(occupied, 0, getArrayElement(occupied, 0))
+  }
+}
+
+fn initSnake(snakeRows: java.lang.Object, snakeCols: java.lang.Object, occupied: java.lang.Object, headIdxArr: java.lang.Object, tailIdxArr: java.lang.Object, snakeLenArr: java.lang.Object, gridSize: int): void => {
+  mid:int = gridSize / 2
+  idx:int = mid * gridSize
+
+  m2:int = mid - 2
+  setArrayElement(snakeRows, 0, mid)
+  setArrayElement(snakeCols, 0, m2)
+  occIdx0:int = idx + m2
+  setArrayElement(occupied, occIdx0, 1)
+
+  m1:int = mid - 1
+  setArrayElement(snakeRows, 1, mid)
+  setArrayElement(snakeCols, 1, m1)
+  occIdx1:int = idx + m1
+  setArrayElement(occupied, occIdx1, 1)
+
+  setArrayElement(snakeRows, 2, mid)
+  setArrayElement(snakeCols, 2, mid)
+  occIdx2:int = idx + mid
+  setArrayElement(occupied, occIdx2, 1)
+
+  setArrayElement(headIdxArr, 0, 2)
+  setArrayElement(tailIdxArr, 0, 0)
+  setArrayElement(snakeLenArr, 0, 3)
+}
+
+fn moveSnake(snakeRows: java.lang.Object, snakeCols: java.lang.Object, occupied: java.lang.Object, headIdxArr: java.lang.Object, tailIdxArr: java.lang.Object, snakeLenArr: java.lang.Object, dirArr: java.lang.Object, foodRowArr: java.lang.Object, foodColArr: java.lang.Object, gameOverArr: java.lang.Object, scoreArr: java.lang.Object, rng: java.util.Random, gridSize: int, bufSize: int): void => {
+  dir:int = getArrayElement(dirArr, 0)
+  hIdx:int = getArrayElement(headIdxArr, 0)
+  headR:int = getArrayElement(snakeRows, hIdx)
+  headC:int = getArrayElement(snakeCols, hIdx)
+
+  nextR:int = computeHeadRow(headR, dir, gridSize)
+  nextC:int = computeHeadCol(headC, dir, gridSize)
+
+  ate:int = didEatFood(nextR, nextC, foodRowArr, foodColArr)
+
+  occCheck:int = nextR * gridSize
+  occIdx:int = occCheck + nextC
+  cellVal:int = getArrayElement(occupied, occIdx)
+
+  if ate == 0 {
+    if cellVal == 1 {
+      setArrayElement(gameOverArr, 0, 1)
+    } else {
+      hNext:int = hIdx + 1
+      wrappedH:int = modulo(hNext, bufSize)
+      setArrayElement(headIdxArr, 0, wrappedH)
+      setArrayElement(snakeRows, wrappedH, nextR)
+      setArrayElement(snakeCols, wrappedH, nextC)
+      setArrayElement(occupied, occIdx, 1)
+
+      tIdx:int = getArrayElement(tailIdxArr, 0)
+      tailR:int = getArrayElement(snakeRows, tIdx)
+      tailC:int = getArrayElement(snakeCols, tIdx)
+      tailOcc:int = tailR * gridSize
+      tailOccIdx:int = tailOcc + tailC
+      setArrayElement(occupied, tailOccIdx, 0)
+      tNext:int = tIdx + 1
+      wrappedT:int = modulo(tNext, bufSize)
+      setArrayElement(tailIdxArr, 0, wrappedT)
+    }
+  } else {
+    hNext:int = hIdx + 1
+    wrappedH:int = modulo(hNext, bufSize)
+    setArrayElement(headIdxArr, 0, wrappedH)
+    setArrayElement(snakeRows, wrappedH, nextR)
+    setArrayElement(snakeCols, wrappedH, nextC)
+    setArrayElement(occupied, occIdx, 1)
+
+    sLen:int = getArrayElement(snakeLenArr, 0)
+    sLenPlus:int = sLen + 1
+    setArrayElement(snakeLenArr, 0, sLenPlus)
+
+    sc:int = getArrayElement(scoreArr, 0)
+    scPlus:int = sc + 1
+    setArrayElement(scoreArr, 0, scPlus)
+
+    placeFood(occupied, foodRowArr, foodColArr, rng, gridSize)
+  }
+}
+
+fn renderCell(gfx: java.awt.Graphics2D, i: int, total: int, gridSize: int, cellSize: int, snakeRows: java.lang.Object, snakeCols: java.lang.Object, occupied: java.lang.Object, headIdxArr: java.lang.Object, foodRowArr: java.lang.Object, foodColArr: java.lang.Object, snakeColor: java.awt.Color, headColor: java.awt.Color, foodColor: java.awt.Color, bgColor: java.awt.Color): void => {
+  if i < total {
+    row:int = i / gridSize
+    rc:int = row * gridSize
+    col:int = i - rc
+    x:int = col * cellSize
+    y:int = row * cellSize
+    cs:int = cellSize - 1
+
+    fr:int = getArrayElement(foodRowArr, 0)
+    fc:int = getArrayElement(foodColArr, 0)
+    occVal:int = getArrayElement(occupied, i)
+    hIdx:int = getArrayElement(headIdxArr, 0)
+    hRow:int = getArrayElement(snakeRows, hIdx)
+    hCol:int = getArrayElement(snakeCols, hIdx)
+
+    if row == fr {
+      if col == fc {
+        gfx.setColor(foodColor)
+      } else {
+        if occVal == 1 {
+          if row == hRow {
+            if col == hCol {
+              gfx.setColor(headColor)
+            } else {
+              gfx.setColor(snakeColor)
+            }
+          } else {
+            gfx.setColor(snakeColor)
+          }
+        } else {
+          gfx.setColor(bgColor)
+        }
+      }
+    } else {
+      if occVal == 1 {
+        if row == hRow {
+          if col == hCol {
+            gfx.setColor(headColor)
+          } else {
+            gfx.setColor(snakeColor)
+          }
+        } else {
+          gfx.setColor(snakeColor)
+        }
+      } else {
+        gfx.setColor(bgColor)
+      }
+    }
+
+    gfx.fillRect(x, y, cs, cs)
+    next:int = i + 1
+    renderCell(gfx, next, total, gridSize, cellSize, snakeRows, snakeCols, occupied, headIdxArr, foodRowArr, foodColArr, snakeColor, headColor, foodColor, bgColor)
+  } else {
+    setArrayElement(occupied, 0, getArrayElement(occupied, 0))
+  }
+}
+
+fn main(): int => {
+  gridSize:int = 20
+  cellSize:int = 20
+  bufSize:int = 400
+  total:int = gridSize * gridSize
+
+  snakeRows:java.lang.Object = createIntArray(bufSize)
+  snakeCols:java.lang.Object = createIntArray(bufSize)
+  occupied:java.lang.Object = createIntArray(total)
+  headIdxArr:java.lang.Object = createIntArray(1)
+  tailIdxArr:java.lang.Object = createIntArray(1)
+  snakeLenArr:java.lang.Object = createIntArray(1)
+  dirArr:java.lang.Object = createIntArray(1)
+  foodRowArr:java.lang.Object = createIntArray(1)
+  foodColArr:java.lang.Object = createIntArray(1)
+  gameOverArr:java.lang.Object = createIntArray(1)
+  pauseArr:java.lang.Object = createIntArray(1)
+  scoreArr:java.lang.Object = createIntArray(1)
+
+  rng:java.util.Random = new java.util.Random()
+
+  clearOccupied(occupied, 0, total)
+  initSnake(snakeRows, snakeCols, occupied, headIdxArr, tailIdxArr, snakeLenArr, gridSize)
+  setArrayElement(dirArr, 0, 1)
+  setArrayElement(gameOverArr, 0, 0)
+  setArrayElement(pauseArr, 0, 0)
+  setArrayElement(scoreArr, 0, 0)
+  placeFood(occupied, foodRowArr, foodColArr, rng, gridSize)
+
+  imgW:int = gridSize * cellSize
+  imgH:int = gridSize * cellSize
+  img:java.awt.image.BufferedImage = new java.awt.image.BufferedImage(imgW, imgH, 1)
+  gfx:java.awt.Graphics2D = img.createGraphics()
+
+  snakeColor:java.awt.Color = new java.awt.Color(0, 200, 0)
+  headColor:java.awt.Color = new java.awt.Color(0, 255, 0)
+  foodColor:java.awt.Color = new java.awt.Color(220, 50, 50)
+  bgColor:java.awt.Color = new java.awt.Color(40, 40, 40)
+
+  renderCell(gfx, 0, total, gridSize, cellSize, snakeRows, snakeCols, occupied, headIdxArr, foodRowArr, foodColArr, snakeColor, headColor, foodColor, bgColor)
+
+  icon:javax.swing.ImageIcon = new javax.swing.ImageIcon(img)
+  label:javax.swing.JLabel = new javax.swing.JLabel(icon)
+
+  frame:javax.swing.JFrame = new javax.swing.JFrame("LASM - Snake")
+  frame.add(label)
+  frame.pack()
+  frame.setResizable(false)
+  frame.setDefaultCloseOperation(3)
+
+  keyListener:java.awt.event.KeyListener = proxy java.awt.event.KeyListener {
+    keyPressed(e:java.awt.event.KeyEvent): void => {
+      code:int = e.getKeyCode()
+      over:int = getArrayElement(gameOverArr, 0)
+
+      if code == 82 {
+        clearOccupied(occupied, 0, total)
+        initSnake(snakeRows, snakeCols, occupied, headIdxArr, tailIdxArr, snakeLenArr, gridSize)
+        setArrayElement(dirArr, 0, 1)
+        setArrayElement(gameOverArr, 0, 0)
+        setArrayElement(pauseArr, 0, 0)
+        setArrayElement(scoreArr, 0, 0)
+        placeFood(occupied, foodRowArr, foodColArr, rng, gridSize)
+      } else {
+        if code == 32 {
+          p:int = getArrayElement(pauseArr, 0)
+          if p == 0 {
+            setArrayElement(pauseArr, 0, 1)
+          } else {
+            setArrayElement(pauseArr, 0, 0)
+          }
+        } else {
+          if over == 0 {
+            curDir:int = getArrayElement(dirArr, 0)
+            updDir:int = computeDir(curDir, code)
+            setArrayElement(dirArr, 0, updDir)
+          } else {
+            setArrayElement(gameOverArr, 0, getArrayElement(gameOverArr, 0))
+          }
+        }
+      }
+    }
+    keyReleased(e:java.awt.event.KeyEvent): void => {
+      printstr("")
+    }
+    keyTyped(e:java.awt.event.KeyEvent): void => {
+      printstr("")
+    }
+  }
+
+  frame.addKeyListener(keyListener)
+
+  timerListener:java.awt.event.ActionListener = proxy java.awt.event.ActionListener {
+    actionPerformed(e:java.awt.event.ActionEvent): void => {
+      over:int = getArrayElement(gameOverArr, 0)
+      paused:int = getArrayElement(pauseArr, 0)
+
+      if over == 0 {
+        if paused == 0 {
+          moveSnake(snakeRows, snakeCols, occupied, headIdxArr, tailIdxArr, snakeLenArr, dirArr, foodRowArr, foodColArr, gameOverArr, scoreArr, rng, gridSize, bufSize)
+        } else {
+          setArrayElement(pauseArr, 0, getArrayElement(pauseArr, 0))
+        }
+      } else {
+        setArrayElement(gameOverArr, 0, getArrayElement(gameOverArr, 0))
+      }
+
+      renderCell(gfx, 0, total, gridSize, cellSize, snakeRows, snakeCols, occupied, headIdxArr, foodRowArr, foodColArr, snakeColor, headColor, foodColor, bgColor)
+      label.repaint()
+
+      sc:int = getArrayElement(scoreArr, 0)
+      scStr:string = java.lang.String/valueOf(sc)
+      overNow:int = getArrayElement(gameOverArr, 0)
+      if overNow == 1 {
+        base:string = "GAME OVER  Score: "
+        titleStr:string = base.concat(scStr)
+        frame.setTitle(titleStr)
+      } else {
+        base:string = "Snake  Score: "
+        titleStr:string = base.concat(scStr)
+        frame.setTitle(titleStr)
+      }
+    }
+  }
+
+  timerObj:javax.swing.Timer = new javax.swing.Timer(150, timerListener)
+  timerObj.start()
+
+  frame.setVisible(true)
+  frame.requestFocus()
+  42
+}
+
+main()

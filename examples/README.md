@@ -13,13 +13,14 @@ A progression from "open a window" to fully playable games.
 | 05 | `05_keyboard_test.lasm` | Keyboard event handler | 3-method KeyListener proxy |
 | 06 | `06_pong_full_game.lasm` | Playable Pong game | Null layout, setBounds, physics, scoring |
 | 07 | `07_game_of_life.lasm` | Conway's Game of Life | Recursive iteration, text rendering, double buffering |
+| 08 | `08_snake.lasm` | Snake game | Circular buffer, O(1) collision, BufferedImage rendering |
 
 ## Running
 
 ### Compile to standalone JAR (recommended)
 ```bash
-clj -M -m lasm.cli compile examples/06_pong_full_game.lasm -o pong.jar
-java -jar pong.jar
+clj -M -m lasm.cli compile examples/08_snake.lasm -o snake.jar
+java -jar snake.jar
 ```
 
 ### Run directly (no JAR)
