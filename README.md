@@ -2,16 +2,18 @@
 
 A small functional language that compiles to JVM bytecode.
 
-## Demo: Pong
+## Demo: Snake
 
-A fully playable Pong game written in ~200 lines of lasm, compiled to a standalone JAR with zero runtime dependencies.
+A fully playable Snake game written in lasm, compiled to a standalone JAR with zero runtime dependencies.
+
+![Snake Demo](resources/snake_demo.gif)
 
 ```bash
-clj -M -m lasm.cli compile examples/06_pong_full_game.lasm -o pong.jar
-java -jar pong.jar
+clj -M -m lasm.cli compile examples/08_snake.lasm -o snake.jar
+java -jar snake.jar
 ```
 
-**Controls:** W/S = left paddle, Up/Down arrows = right paddle
+**Controls:** Arrow keys = move, SPACE = pause, R = restart
 
 ## Features
 
@@ -71,6 +73,7 @@ See [`examples/`](examples/) for the full progression from hello-window to games
 | 05 | `05_keyboard_test.lasm` | KeyListener with 3-method proxy |
 | 06 | `06_pong_full_game.lasm` | Playable Pong: keyboard input, ball physics, collision detection, scoring |
 | 07 | `07_game_of_life.lasm` | Conway's Game of Life: recursive iteration, text rendering, double buffering |
+| 08 | `08_snake.lasm` | Snake game: circular buffer, collision detection, BufferedImage rendering |
 
 ## Tutorials
 
@@ -82,8 +85,8 @@ See [`examples/`](examples/) for the full progression from hello-window to games
 
 ### Compile to JAR
 ```bash
-clj -M -m lasm.cli compile examples/06_pong_full_game.lasm -o pong.jar
-java -jar pong.jar
+clj -M -m lasm.cli compile examples/08_snake.lasm -o snake.jar
+java -jar snake.jar
 ```
 
 ### Run directly (no JAR)
@@ -190,7 +193,7 @@ lasm/
 │   ├── cli.clj          # CLI interface (run, compile, parse, ast)
 │   └── decompiler.clj   # Debug: bytecode disassembly
 ├── test/lasm/           # Test suite
-├── examples/            # Example programs (01-06)
+├── examples/            # Example programs (01-08)
 └── bin/lasmc            # Shell wrapper for compiler
 ```
 
